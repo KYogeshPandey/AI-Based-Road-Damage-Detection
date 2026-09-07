@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.1",
+  "dataset_id": "rdd2022_india_japan_v1_1",
+  "dataset_version": "1.1.0",
+  "parent_version": "1.0",
+  "parent_dataset_root": "data/processed/rdd2022_india_japan_v1",
+  "revision_summary": "Revises zero-edge normalization, object-level dispositions, numeric-block guarding, split optimization, country balance, and complete near-duplicate candidate evaluation while preserving the four-class taxonomy and raw source.",
+  "source_dataset": "RDD2022",
+  "source_dataset_version": "1",
+  "source_root": "data/external/rdd2022/raw",
+  "phase2a_manifests_root": "data/external/rdd2022/manifests",
+  "output_root": "data/processed/rdd2022_india_japan_v1_1",
+  "source_scan_worker_count": 8,
+  "external_teacher_video": {
+    "path": "data/videos/dashcam_raw.avi",
+    "expected_sha256": "58c196a117996e71654f202ecfcff66ee6edb4fcd51c63eb4455f8009d3dfe18"
+  },
+  "countries": ["India", "Japan"],
+  "taxonomy": [
+    {"id": 0, "raw_code": "D00", "name": "D00_longitudinal_crack"},
+    {"id": 1, "raw_code": "D10", "name": "D10_transverse_crack"},
+    {"id": 2, "raw_code": "D20", "name": "D20_alligator_crack"},
+    {"id": 3, "raw_code": "D40", "name": "D40_pothole"}
+  ],
+  "class_policy": {
+    "direct_target_classes": ["D00", "D10", "D20", "D40"],
+    "known_non_target_classes": ["D01", "D11", "D43", "D44", "D50"],
+    "quarantine_unknown_classes": ["D0w0"],
+    "known_non_target_treatment": "preserve_as_background_context_without_positive_label",
+    "unknown_treatment": "quarantine_entire_image_without_guessing"
+  },
+  "object_status_policy": {
+    "states": [
+      "retain_target",
+      "known_non_target",
+      "reject_invalid",
+      "reject_tiny",
+      "quarantine_ambiguous",
+      "quarantine_unknown",
+      "whole_image_quarantine"
+    ],
+    "raw_object_records_always_preserved": true,
+    "rejected_object_does_not_discard_other_valid_objects": true,
+    "ambiguous_unlabelled_target_requires_whole_image_quarantine": true
+  },
+  "policy_revision": {
+    "approved_zero_edge_filenames": [
+      "Japan_003421.jpg",
+      "Japan_011029.jpg",
+      "Japan_011979.jpg",
+      "Japan_006792.jpg",
+      "Japan_012313.jpg",
+      "Japan_000375.jpg",
+      "Japan_000275.jpg",
+      "Japan_007628.jpg",
+      "Japan_002087.jpg",
+      "Japan_003238.jpg",
+      "Japan_010217.jpg",
+      "Japan_010631.jpg",
+      "Japan_007834.jpg"
+    ],
+    "whole_image_quarantine_filenames": {
+      "India_006389.jpg": "unknown_D0w0_not_guessed",
+      "Japan_012185.jpg": "unresolved_near_coincident_D00_D20_class_conflict",
+      "Japan_004342.jpg": "questionable_small_edge_D40_with_visible_target_like_content",
+      "India_005123.jpg": "visually_ambiguous_edge_D00",
+      "India_009013.jpg": "questionable_edge_D40_with_visible_target_like_content"
+    },
+    "rejected_objects": [
+      {
+        "original_filename": "Japan_011217.jpg",
+        "object_index_one_based": 2,
+        "raw_class": "D20",
+        "object_status": "reject_invalid",
+        "reason": "visually_reviewed_non_road_sky_building_box"
+      },
+      {
+        "original_filename": "Japan_001265.jpg",
+        "object_index_one_based": 4,
+        "raw_class": "D20",
+        "object_status": "reject_tiny",
+        "reason": "unverifiable_extremely_tiny_target"
+      }
+    ]
+  },
+  "expected_source": {
+    "labelled_images_by_country": {"India": 7706, "Japan": 10506},
+    "official_unlabelled_test_images_by_country": {"India": 1959, "Japan": 2627},
+    "target_objects": {"D00": 5604, "D10": 4047, "D20": 8220, "D40": 5430}
+  },
+  "annotation_validation": {
+    "source_voc_coordinate_convention": "one_based_inclusive_xyxy_pixels_with_explicit_zero_lower_edge_exception",
+    "canonical_coordinate_convention": "zero_based_half_open_xyxy_pixels",
+    "allow_zero_lower_edge": true,
+    "projected_model_canvas_size": 640,
+    "tiny_projected_area_pixels": 64.0,
+    "unusual_aspect_ratio_min": 0.1,
+    "unusual_aspect_ratio_max": 10.0,
+    "quarantine_target_flags": [
+      "malformed_coordinate",
+      "non_integer_coordinate",
+      "negative_coordinate",
+      "zero_coordinate",
+      "inverted_box",
+      "zero_area_box",
+      "out_of_bounds",
+      "xml_image_dimension_mismatch"
+    ]
+  },
+  "grouping": {
+    "timestamp_gap_seconds": 10,
+    "timestamp_group_seconds": 30,
+    "filename_numeric_group_size": 100,
+    "timestamp_guard_seconds": 10,
+    "filename_guard_numeric_ids": 0,
+    "timestamp_confidence": "medium",
+    "numeric_block_method_name": "numeric_block_proxy",
+    "numeric_block_confidence": "low"
+  },
+  "near_duplicates": {
+    "method": "dhash64_lsh_plus_32x32_gray_mae",
+    "dhash_hamming_candidate_max": 6,
+    "confirmed_hamming_max": 2,
+    "confirmed_gray_mae_max": 0.025,
+    "lsh_band_count": 4,
+    "maximum_bucket_size": 128,
+    "maximum_neighbors_per_oversized_bucket_item": 20,
+    "maximum_candidates_per_image": 8,
+    "evaluate_candidates_before_display_cap": true,
+    "maximum_review_pairs": 32
+  },
+  "split": {
+    "ratios": {"train": 0.70, "val": 0.15, "test": 0.15},
+    "ratio_tolerance_percentage_points": 2.0,
+    "country_share_tolerance_percentage_points": 5.0,
+    "guard_loss_max_percent": 5.0,
+    "seed": 20260904,
+    "description": "leakage-reduced grouped split",
+    "optimization": {
+      "maximum_local_search_passes": 8,
+      "weights": {
+        "split_ratio_pp_squared": 4.0,
+        "country_share_pp_squared": 4.0,
+        "class_ratio_pp_squared": 0.25,
+        "positive_negative_pp_squared": 0.5,
+        "timestamp_transition": 1.0,
+        "projected_timestamp_guard_image": 0.1,
+        "tolerance_violation_pp_squared": 1000.0
+      }
+    }
+  },
+  "review_artifacts": {
+    "thumbnail_width": 240,
+    "thumbnail_height": 192,
+    "contact_sheet_columns": 4,
+    "contact_sheet_page_size": 16,
+    "jpeg_quality": 84,
+    "representative_per_class_country": 2,
+    "representative_negative_count": 16,
+    "representative_per_eval_split": 16,
+    "representative_aspect_ratio_count": 16
+  }
+}

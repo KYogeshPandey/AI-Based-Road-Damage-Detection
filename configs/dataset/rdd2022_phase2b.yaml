@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "rdd2022_india_japan_v1",
+  "dataset_version": "1.0.0",
+  "source_dataset": "RDD2022",
+  "source_dataset_version": "1",
+  "source_root": "data/external/rdd2022/raw",
+  "phase2a_manifests_root": "data/external/rdd2022/manifests",
+  "output_root": "data/processed/rdd2022_india_japan_v1",
+  "countries": ["India", "Japan"],
+  "taxonomy": [
+    {"id": 0, "raw_code": "D00", "name": "D00_longitudinal_crack"},
+    {"id": 1, "raw_code": "D10", "name": "D10_transverse_crack"},
+    {"id": 2, "raw_code": "D20", "name": "D20_alligator_crack"},
+    {"id": 3, "raw_code": "D40", "name": "D40_pothole"}
+  ],
+  "class_policy": {
+    "direct_target_classes": ["D00", "D10", "D20", "D40"],
+    "known_non_target_classes": ["D01", "D11", "D43", "D44", "D50"],
+    "quarantine_unknown_classes": ["D0w0"],
+    "known_non_target_treatment": "preserve_as_background_context_without_positive_label",
+    "unknown_treatment": "quarantine_entire_image_without_guessing"
+  },
+  "expected_source": {
+    "labelled_images_by_country": {"India": 7706, "Japan": 10506},
+    "official_unlabelled_test_images_by_country": {"India": 1959, "Japan": 2627},
+    "target_objects": {"D00": 5604, "D10": 4047, "D20": 8220, "D40": 5430}
+  },
+  "annotation_validation": {
+    "source_voc_coordinate_convention": "one_based_inclusive_xyxy_pixels",
+    "canonical_coordinate_convention": "zero_based_half_open_xyxy_pixels",
+    "projected_model_canvas_size": 640,
+    "tiny_projected_area_pixels": 64.0,
+    "unusual_aspect_ratio_min": 0.1,
+    "unusual_aspect_ratio_max": 10.0,
+    "quarantine_target_flags": [
+      "malformed_coordinate",
+      "non_integer_coordinate",
+      "negative_coordinate",
+      "zero_coordinate",
+      "inverted_box",
+      "zero_area_box",
+      "out_of_bounds",
+      "xml_image_dimension_mismatch"
+    ]
+  },
+  "grouping": {
+    "timestamp_gap_seconds": 10,
+    "timestamp_group_seconds": 30,
+    "filename_numeric_group_size": 100,
+    "timestamp_guard_seconds": 10,
+    "filename_guard_numeric_ids": 10,
+    "timestamp_confidence": "medium",
+    "filename_proxy_confidence": "low"
+  },
+  "near_duplicates": {
+    "method": "dhash64_lsh_plus_32x32_gray_mae",
+    "dhash_hamming_candidate_max": 6,
+    "confirmed_hamming_max": 2,
+    "confirmed_gray_mae_max": 0.025,
+    "lsh_band_count": 4,
+    "maximum_bucket_size": 128,
+    "maximum_neighbors_per_oversized_bucket_item": 20,
+    "maximum_candidates_per_image": 8,
+    "maximum_review_pairs": 32
+  },
+  "split": {
+    "ratios": {"train": 0.70, "val": 0.15, "test": 0.15},
+    "ratio_tolerance_percentage_points": 2.0,
+    "seed": 20260904,
+    "description": "leakage-reduced grouped split"
+  },
+  "review_artifacts": {
+    "thumbnail_width": 240,
+    "thumbnail_height": 192,
+    "contact_sheet_columns": 4,
+    "contact_sheet_page_size": 16,
+    "jpeg_quality": 88,
+    "representative_per_class_country": 2,
+    "representative_negative_count": 16,
+    "representative_per_eval_split": 16
+  }
+}

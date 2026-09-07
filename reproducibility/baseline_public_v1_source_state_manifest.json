@@ -1,0 +1,291 @@
+{
+  "schema_version": "baseline_public_v1.source_state.v1",
+  "algorithm": "sha256",
+  "included_directories": [
+    "src",
+    "configs",
+    "tests",
+    "road-damage-project-docs"
+  ],
+  "included_root_files": [
+    "AGENTS.md",
+    "requirements.txt",
+    ".gitignore"
+  ],
+  "excluded_generated_content": [
+    "data",
+    "models",
+    "outputs",
+    "runs",
+    "weights",
+    ".venv*",
+    "__pycache__",
+    "*.pyc",
+    "temporary files"
+  ],
+  "file_count": 52,
+  "total_bytes": 676191,
+  "source_tree_sha256": "1e94e69c6a7e4b1532d764d41a05118c2cd78e6a3aa40aab2bb1829e512858da",
+  "files": [
+    {
+      "path": ".gitignore",
+      "size_bytes": 694,
+      "sha256": "013600f3dd5f33fb2c173957bda696dea6322c065ea183994af33ec8a3578ce5"
+    },
+    {
+      "path": "AGENTS.md",
+      "size_bytes": 4957,
+      "sha256": "d8c805df51594be01caae074726ce185bc9daf6cdc9f3e7f2df133b2cfb112e1"
+    },
+    {
+      "path": "configs/dataset/rdd2022_phase2a.yaml",
+      "size_bytes": 3618,
+      "sha256": "b73ac33c65089384f872c261db94a2be35fb5b1cdbdbde6ed97d1d3973898487"
+    },
+    {
+      "path": "configs/dataset/rdd2022_phase2b.yaml",
+      "size_bytes": 2992,
+      "sha256": "9297457438fe480be644ab0a2530413da505feaa306ffc74481e68021500dc3b"
+    },
+    {
+      "path": "configs/dataset/rdd2022_phase2b_v1_1.yaml",
+      "size_bytes": 5995,
+      "sha256": "0b901f3cd992bd5b4ebb4afe7fb0cec56b5a681307a9a85e8b4abc8fff67f795"
+    },
+    {
+      "path": "configs/dataset/rdd2022_phase2c1_yolo_detection_v1.yaml",
+      "size_bytes": 2335,
+      "sha256": "5c2e96157d4b6057d23c4d65672f3a612e91f5edbcabe1d4a699a7e501a29a7d"
+    },
+    {
+      "path": "configs/training/baseline_public_v1_train_val.yaml",
+      "size_bytes": 307,
+      "sha256": "0a97c8ce812138e8bbc28e441c6965f007022ff6782bec1bedff43ded7c606a5"
+    },
+    {
+      "path": "configs/training/baseline_public_v1_yolov8s.yaml",
+      "size_bytes": 1785,
+      "sha256": "0bc019775c64465862486f436c6b65848bc76a8442f573ed1c4498c24c557a10"
+    },
+    {
+      "path": "configs/training/phase3b_smoke_subset.yaml",
+      "size_bytes": 652,
+      "sha256": "579b16d909d13d1f2cd7dc8814a7cd9d4013d71c669b61660260eaa708fd53d4"
+    },
+    {
+      "path": "configs/video/adjudication_pilot.yaml",
+      "size_bytes": 5364,
+      "sha256": "8b66972722307f3e7ffcb5e377a27f617a61aa2543cc6ab4916602daa0ad6839"
+    },
+    {
+      "path": "configs/video/reconnaissance.yaml",
+      "size_bytes": 966,
+      "sha256": "60d9922328fc01b1459f981081decc81f72c908b327920819a19f502f5b4f4e2"
+    },
+    {
+      "path": "requirements.txt",
+      "size_bytes": 110,
+      "sha256": "7ca8d006b4c29882bde3ca0d7ff9a9249dfcd8faccba055114c2cb4b64b6b50e"
+    },
+    {
+      "path": "road-damage-project-docs/AGENTS.md",
+      "size_bytes": 4957,
+      "sha256": "d8c805df51594be01caae074726ce185bc9daf6cdc9f3e7f2df133b2cfb112e1"
+    },
+    {
+      "path": "road-damage-project-docs/ARCHITECTURE.md",
+      "size_bytes": 8000,
+      "sha256": "d182bc3cda8112ed0d513701be8d7365ecd22773b9f3cd4e735e24eec47695d9"
+    },
+    {
+      "path": "road-damage-project-docs/BASELINE_PUBLIC_V1_RUNBOOK.md",
+      "size_bytes": 6617,
+      "sha256": "d9c65b5e883e7738b01f987bccef061fdcfc6cb09e159f16d3d695cbe832224a"
+    },
+    {
+      "path": "road-damage-project-docs/DATASET_GUIDELINES.md",
+      "size_bytes": 9838,
+      "sha256": "d0c0486befb650c8bd79d1db862b30a414f192f69bf50b95c9c225a931b2393a"
+    },
+    {
+      "path": "road-damage-project-docs/ETHICS_AND_LICENSE.md",
+      "size_bytes": 5636,
+      "sha256": "b54c3c6f43ac0a1b035b755f02f915ec0791d74a8914bdaab8424d0b71df6aea"
+    },
+    {
+      "path": "road-damage-project-docs/EVALUATION_PLAN.md",
+      "size_bytes": 7302,
+      "sha256": "8fbf06d18ba8f6856920f04992e71b367d2e05034eaf6b827d4dc9064ea18a7b"
+    },
+    {
+      "path": "road-damage-project-docs/PROJECT_PRD.md",
+      "size_bytes": 15528,
+      "sha256": "7fc29d454e4d10d6ccf686d972ac8531a8a77a1758f588ec729e0153b20ee18b"
+    },
+    {
+      "path": "road-damage-project-docs/PROJECT_ROADMAP.md",
+      "size_bytes": 4887,
+      "sha256": "ec085465114787029bc3dda7f0b11562707f23c999a2c45a50fe9b594ee721ac"
+    },
+    {
+      "path": "road-damage-project-docs/README.md",
+      "size_bytes": 2877,
+      "sha256": "77a61d45b43aafa77284e444af158c47bebb5ce2db38d16f1121cfe2e0466ff2"
+    },
+    {
+      "path": "road-damage-project-docs/TECH_STACK.md",
+      "size_bytes": 6129,
+      "sha256": "2d90d404f3cb17f61e7d0e224e61f0a7e6409387e23aa135194c7c2c9437a23f"
+    },
+    {
+      "path": "road-damage-project-docs/WORKFLOW.md",
+      "size_bytes": 8575,
+      "sha256": "ef49d49dd205a4b5c4261168234459cefdf15056a366dc4aa311a6d3fdf0bdcd"
+    },
+    {
+      "path": "src/road_damage/__init__.py",
+      "size_bytes": 37,
+      "sha256": "b1c9fdb18bf0fd33e0d9263be6f48045525d8f0a8f4746ab83e442a083c04aab"
+    },
+    {
+      "path": "src/road_damage/dataset/__init__.py",
+      "size_bytes": 70,
+      "sha256": "b2e983477636cfb6cf640f8a82942add0f7bbdfdbec24139402280960a266695"
+    },
+    {
+      "path": "src/road_damage/dataset/adjudication_pilot.py",
+      "size_bytes": 38351,
+      "sha256": "ed5ad4c433037e7790cdb477e3c61bd4fb84ed860334b9dd8023b714a971486b"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_acquire.py",
+      "size_bytes": 42266,
+      "sha256": "7c5d2183af5e0889e5a3f618bdab256d117244b27970c753e849b2152bb2244c"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_audit.py",
+      "size_bytes": 18135,
+      "sha256": "e27ccb9d2762868c92788573cdb0895fb6dc0e9164a278b547608427463fd371"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_canonical.py",
+      "size_bytes": 63924,
+      "sha256": "03da445060232c04dcb269f5a9208439cb6342c4330cd5d06eb387a4aa592e52"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_common.py",
+      "size_bytes": 6865,
+      "sha256": "719af02011497714933314acedab3c4ad1adb80be71a8c4352fc62e446ac33a9"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_construct.py",
+      "size_bytes": 69133,
+      "sha256": "b5c6e9ec52ace983b92f3f396f90bb6f2b4ab9b33e8f5b1b0a3cbd522631a930"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_yolo_export.py",
+      "size_bytes": 41107,
+      "sha256": "18a353d2b1e938c5382a30e28c151c8f125465ec93052b04919150c73b1224b5"
+    },
+    {
+      "path": "src/road_damage/dataset/rdd2022_yolo_validate.py",
+      "size_bytes": 32278,
+      "sha256": "f922c10cb194d9352cdb2c6750587172fbb7649cb6ab29c038f221a061fb944a"
+    },
+    {
+      "path": "src/road_damage/training/__init__.py",
+      "size_bytes": 41,
+      "sha256": "0fd678fd70136543abbb5a8e6053eb23f6c08b7908f6bd76fed03bbb7db6de47"
+    },
+    {
+      "path": "src/road_damage/training/baseline_support.py",
+      "size_bytes": 27070,
+      "sha256": "2a00e050306ccd40a5a17d12fe9c18b5959f0cb9b4643b899f2dc672ad0757ff"
+    },
+    {
+      "path": "src/road_damage/training/create_smoke_subset.py",
+      "size_bytes": 33043,
+      "sha256": "0bd85fae1d859f9a083b5c81be07b8d77d4d2c68e02194ce16a85a75c238375b"
+    },
+    {
+      "path": "src/road_damage/training/early_stopping_state.py",
+      "size_bytes": 10613,
+      "sha256": "91a3d739da9383f93978f04b1960493942cb5e5fbdbe0d406bffd7f2074a907f"
+    },
+    {
+      "path": "src/road_damage/training/inspect_checkpoint.py",
+      "size_bytes": 7253,
+      "sha256": "8f375192faf1856bddfd3c858a211701b0bdf1fbda029f5acddb41fb88bcd7fe"
+    },
+    {
+      "path": "src/road_damage/training/source_state.py",
+      "size_bytes": 4518,
+      "sha256": "f04c39a74a2c26b2cf3e1c16b20a70ca9e35a973affd0c633e3873fc2cb8bde9"
+    },
+    {
+      "path": "src/road_damage/training/train_baseline.py",
+      "size_bytes": 4626,
+      "sha256": "414388e64e10230fadc511640828d64a57795c4f1338e6765c4d0e25b9ed8074"
+    },
+    {
+      "path": "src/road_damage/video/__init__.py",
+      "size_bytes": 48,
+      "sha256": "525ab2a0df0b9220435a437f00c95f211e4f367b4c989e9caf24fd2b2aad9eaa"
+    },
+    {
+      "path": "src/road_damage/video/inspect_video.py",
+      "size_bytes": 23768,
+      "sha256": "b485e051edf9bb47b69318da763b7b5de7dd9c221ceba7d283bed9f6ee2106cf"
+    },
+    {
+      "path": "src/road_damage/video/reconnaissance.py",
+      "size_bytes": 25025,
+      "sha256": "fa020f6b0731dce1cbea7bd5e4e624a2d318dad939875d150fa028da1103a179"
+    },
+    {
+      "path": "tests/test_adjudication_pilot.py",
+      "size_bytes": 5828,
+      "sha256": "1ecfd95c4c4556836f0f79539a323c4c81557e69b0c0c0ab4d07640ec4dd3eeb"
+    },
+    {
+      "path": "tests/test_baseline_training.py",
+      "size_bytes": 29096,
+      "sha256": "49f5d6376675d25d0cb382e33be9ea4597ee04fbfa8c001d9b032a464cf5267c"
+    },
+    {
+      "path": "tests/test_create_smoke_subset.py",
+      "size_bytes": 5993,
+      "sha256": "10476899567466bd1af1a1feb34e44b4269bebea553d862af4c3d50e505d1a8d"
+    },
+    {
+      "path": "tests/test_inspect_video.py",
+      "size_bytes": 3633,
+      "sha256": "1dc78fae23181747ed5d19b566c4a26ccec7bd00bd2174c523ef6c1b7c8bf7d5"
+    },
+    {
+      "path": "tests/test_inspect_video_integration.py",
+      "size_bytes": 2351,
+      "sha256": "4513f0c67d6c651724f3cc4efd74b2cfa6eeda1af1ad9e7a004eb51c0bfe9bb2"
+    },
+    {
+      "path": "tests/test_rdd2022_phase2a.py",
+      "size_bytes": 17879,
+      "sha256": "2cc36252a039d022dc7da99986d4fd1185f87a3f42fd6a259f2434eeebb7e20a"
+    },
+    {
+      "path": "tests/test_rdd2022_phase2b.py",
+      "size_bytes": 34892,
+      "sha256": "13c3c8185b5028028accdda407224a32e7921c271adc199812bf761cec9b33f6"
+    },
+    {
+      "path": "tests/test_rdd2022_phase2c.py",
+      "size_bytes": 14394,
+      "sha256": "1e499f13dd0c9ca29b0e23bd181a54efef57fa4889ad251f2e93e2ad60d95259"
+    },
+    {
+      "path": "tests/test_reconnaissance.py",
+      "size_bytes": 3833,
+      "sha256": "cccd07c3aa8526b6f7665018ae636c4aceb28ba6da662c02d5f1e028655108fe"
+    }
+  ]
+}

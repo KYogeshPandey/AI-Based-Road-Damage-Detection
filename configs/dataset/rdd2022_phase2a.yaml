@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "dataset": {
+    "title": "RDD2022 - The multi-national Road Damage Dataset released through CRDDC'2022",
+    "version": "1",
+    "figshare_doi": "10.6084/m9.figshare.21431547.v1",
+    "figshare_record_url": "https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547/1",
+    "figshare_api_url": "https://api.figshare.com/v2/articles/21431547/versions/1",
+    "authors_repository_url": "https://github.com/sekilab/RoadDamageDetector",
+    "data_article_url": "https://doi.org/10.1002/gdj3.260",
+    "authors": [
+      "Deeksha Arya",
+      "Hiroya Maeda",
+      "Yoshihide Sekimoto",
+      "Hiroshi Omata",
+      "Sanjay Kumar Ghosh",
+      "Durga Toshniwal",
+      "Madhavendra Sharma",
+      "Van Vung Pham",
+      "Jingtao Zhong",
+      "Muneer Al-Hammadi",
+      "Mamoona Birkhez Shami",
+      "Du Nguyen",
+      "Hanglin Cheng",
+      "Jing Zhang",
+      "Alex Klein-Paste",
+      "Helge Mork",
+      "Frank Lindseth",
+      "Toshikazu Seto",
+      "Alexander Mraz",
+      "Takehiro Kashiyama"
+    ],
+    "licenses": {
+      "figshare": {
+        "stated_license": "CC BY 4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "evidence_url": "https://api.figshare.com/v2/articles/21431547/versions/1"
+      },
+      "authors_repository": {
+        "stated_license": "CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "evidence_url": "https://github.com/sekilab/RoadDamageDetector#license"
+      },
+      "project_conservative_interpretation": "CC BY-SA 4.0",
+      "discrepancy_status": "unresolved"
+    }
+  },
+  "allowed_countries": ["India", "Japan"],
+  "acquisition_fallback": {
+    "reason": "Official country-specific S3 URLs returned HTTP 403 AccessDenied on 2026-09-04; project owner approved the official Figshare all-country archive solely as a transport artifact.",
+    "source_type": "official_figshare_full_archive_selective_extraction",
+    "article_id": 21431547,
+    "article_version": 1,
+    "file_id": 38030910,
+    "archive_filename": "RDD2022_released_through_CRDDC2022.zip",
+    "download_url": "https://ndownloader.figshare.com/files/38030910",
+    "size_bytes": 13264172619,
+    "supplied_md5": "b62bd51d2ffcfaa76c60f234f0cc2bb3",
+    "parallel_download_connections": 8,
+    "countries_to_extract": ["India", "Japan"],
+    "countries_intentionally_not_extracted": [
+      "China_Drone",
+      "China_MotorBike",
+      "Czech",
+      "Norway",
+      "United_States"
+    ],
+    "minimum_extraction_and_temporary_reserve_bytes": 5000000000
+  },
+  "countries": [
+    {
+      "country": "India",
+      "archive_filename": "RDD2022_India.zip",
+      "source_url": "https://bigdatacup.s3.ap-northeast-1.amazonaws.com/2022/CRDDC2022/RDD2022/Country_Specific_Data_CRDDC2022/RDD2022_India.zip",
+      "published_approximate_size_mb": 502.3,
+      "expected_image_dimensions": [[720, 720]],
+      "expected_target_object_counts": {
+        "D00": 1555,
+        "D10": 68,
+        "D20": 2021,
+        "D40": 3187
+      }
+    },
+    {
+      "country": "Japan",
+      "archive_filename": "RDD2022_Japan.zip",
+      "source_url": "https://bigdatacup.s3.ap-northeast-1.amazonaws.com/2022/CRDDC2022/RDD2022/Country_Specific_Data_CRDDC2022/RDD2022_Japan.zip",
+      "published_approximate_size_mb": 1022.9,
+      "expected_image_dimensions": [[600, 600]],
+      "expected_target_object_counts": {
+        "D00": 4049,
+        "D10": 3979,
+        "D20": 6199,
+        "D40": 2243
+      }
+    }
+  ],
+  "target_classes": ["D00", "D10", "D20", "D40"]
+}

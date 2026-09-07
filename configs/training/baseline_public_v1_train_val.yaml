@@ -1,0 +1,7 @@
+train: "E:/AI_Road_Damage_Project/data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1/images/train"
+val: "E:/AI_Road_Damage_Project/data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1/images/val"
+names:
+  0: D00_longitudinal_crack
+  1: D10_transverse_crack
+  2: D20_alligator_crack
+  3: D40_pothole

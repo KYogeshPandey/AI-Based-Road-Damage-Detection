@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "phase": "Phase 1.6 - full-resolution adjudication pilot preparation",
+  "selection": {
+    "target_count": 180,
+    "candidate_sampling_fps": 5.0,
+    "negative_sampling_fps": 1.0,
+    "candidate_context_before_seconds": 1.0,
+    "candidate_context_after_seconds": 1.0,
+    "quality_weights": {
+      "roi_sharpness": 0.40,
+      "road_visibility_contrast": 0.30,
+      "temporal_change": 0.30
+    }
+  },
+  "frame_output": {
+    "jpeg_quality": 95
+  },
+  "contact_sheet": {
+    "thumbnail_width": 360,
+    "thumbnail_height": 288,
+    "columns": 5,
+    "rows": 4,
+    "label_height": 32,
+    "jpeg_quality": 90
+  },
+  "mask_preview": {
+    "timestamp": "00:31:01"
+  },
+  "candidate_intervals": [
+    {"id": "candidate_001", "start": "00:04:19", "end": "00:04:23", "quota": 8},
+    {"id": "candidate_002", "start": "00:05:11", "end": "00:05:47", "quota": 16},
+    {"id": "candidate_003", "start": "00:10:09", "end": "00:10:15", "quota": 8},
+    {"id": "candidate_004", "start": "00:14:27", "end": "00:14:33", "quota": 8},
+    {"id": "candidate_005", "start": "00:17:17", "end": "00:18:23", "quota": 18},
+    {"id": "candidate_006", "start": "00:20:25", "end": "00:20:33", "quota": 8},
+    {"id": "candidate_007", "start": "00:22:01", "end": "00:22:23", "quota": 12},
+    {"id": "candidate_008", "start": "00:38:01", "end": "00:40:49", "quota": 22},
+    {"id": "candidate_009", "start": "00:44:01", "end": "00:44:15", "quota": 10},
+    {"id": "candidate_010", "start": "00:45:03", "end": "00:46:47", "quota": 20}
+  ],
+  "negative_intervals": [
+    {"id": "easy_001", "type": "normal_negative", "start": "00:28:55", "end": "00:31:59", "quota": 3, "selection_basis": "clear smooth highway pavement"},
+    {"id": "easy_002", "type": "normal_negative", "start": "00:33:01", "end": "00:35:59", "quota": 3, "selection_basis": "clear smooth highway pavement"},
+    {"id": "easy_003", "type": "normal_negative", "start": "00:41:41", "end": "00:42:39", "quota": 3, "selection_basis": "clear highway pavement after coarse section"},
+    {"id": "easy_004", "type": "normal_negative", "start": "00:42:41", "end": "00:43:59", "quota": 3, "selection_basis": "clear smooth highway pavement"},
+    {"id": "easy_005", "type": "normal_negative", "start": "00:49:17", "end": "00:50:11", "quota": 3, "selection_basis": "clear highway pavement"},
+    {"id": "easy_006", "type": "normal_negative", "start": "00:52:01", "end": "00:54:23", "quota": 3, "selection_basis": "long smooth-road pool sampled sparsely"},
+    {"id": "easy_007", "type": "normal_negative", "start": "00:56:41", "end": "00:57:05", "quota": 2, "selection_basis": "clear pavement before transition"},
+    {"id": "easy_008", "type": "normal_negative", "start": "00:57:45", "end": "00:58:47", "quota": 2, "selection_basis": "clear highway pavement"},
+    {"id": "easy_009", "type": "normal_negative", "start": "01:00:51", "end": "01:01:19", "quota": 3, "selection_basis": "clear highway pavement"},
+    {"id": "hard_001", "type": "hard_negative", "start": "00:28:21", "end": "00:28:53", "quota": 3, "selection_basis": "traffic or partial road occlusion"},
+    {"id": "hard_002", "type": "hard_negative", "start": "00:32:01", "end": "00:33:00", "quota": 3, "selection_basis": "traffic, shadows, or pavement texture"},
+    {"id": "hard_003", "type": "hard_negative", "start": "00:36:01", "end": "00:36:23", "quota": 2, "selection_basis": "markings or changing road geometry"},
+    {"id": "hard_004", "type": "hard_negative", "start": "00:41:01", "end": "00:41:39", "quota": 4, "selection_basis": "coarse or resurfaced pavement and seams"},
+    {"id": "hard_005", "type": "hard_negative", "start": "00:47:25", "end": "00:47:59", "quota": 3, "selection_basis": "overpass shadows or worn markings"},
+    {"id": "hard_006", "type": "hard_negative", "start": "00:48:01", "end": "00:49:15", "quota": 3, "selection_basis": "shadows, seams, markings, or coarse pavement"},
+    {"id": "hard_007", "type": "hard_negative", "start": "00:50:49", "end": "00:51:59", "quota": 3, "selection_basis": "traffic, occlusion, or pavement texture"},
+    {"id": "hard_008", "type": "hard_negative", "start": "00:56:01", "end": "00:56:39", "quota": 2, "selection_basis": "traffic, shadows, or markings"},
+    {"id": "hard_009", "type": "hard_negative", "start": "00:57:21", "end": "00:57:43", "quota": 1, "selection_basis": "short transition with hard-negative visual cues"},
+    {"id": "hard_010", "type": "hard_negative", "start": "01:00:37", "end": "01:00:49", "quota": 1, "selection_basis": "short transition with hard-negative visual cues"}
+  ],
+  "avoid_intervals": [
+    {"start": "00:00:01", "end": "00:00:35"},
+    {"start": "00:03:49", "end": "00:04:07"},
+    {"start": "00:06:49", "end": "00:07:15"},
+    {"start": "00:11:25", "end": "00:11:59"},
+    {"start": "00:22:37", "end": "00:23:09"},
+    {"start": "00:23:25", "end": "00:23:45"},
+    {"start": "00:24:25", "end": "00:28:17"},
+    {"start": "00:36:25", "end": "00:37:59"},
+    {"start": "00:46:39", "end": "00:47:23"},
+    {"start": "00:50:13", "end": "00:50:47"},
+    {"start": "00:55:01", "end": "00:55:59"},
+    {"start": "00:57:07", "end": "00:57:19"},
+    {"start": "00:58:49", "end": "00:59:33"},
+    {"start": "00:59:49", "end": "01:00:35"},
+    {"start": "01:01:37", "end": "01:01:47"},
+    {"start": "01:02:01", "end": "01:02:31"}
+  ]
+}

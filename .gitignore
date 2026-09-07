@@ -1,0 +1,53 @@
+# Private, public-dataset, canonical, and generated data artifacts.
+/data/
+
+# Generated training, inference, review, and framework run artifacts.
+/outputs/
+/runs/
+/models/
+/weights/
+
+# Large model/checkpoint/export formats.
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.engine
+
+# Large dataset/model archives and compressed bundles.
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+
+# Local Python environments, including recovery backups.
+/.venv*/
+
+# Python/tool caches and temporary files.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.tmp
+*.part
+*.partial
+
+# Private video and local environment values.
+*.avi
+*.mp4
+*.mkv
+*.mov
+*.mpeg
+*.mpg
+*.wmv
+*.webm
+*.m4v
+.env
+.env.*
+!.env.example

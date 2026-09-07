@@ -1,0 +1,62 @@
+{
+  "schema_version": "2C.1",
+  "export_version": "1.0.0",
+  "canonical_dataset_path": "data/processed/rdd2022_india_japan_v1_1",
+  "canonical_dataset_version": "1.1.0",
+  "parent_dataset_path": "data/processed/rdd2022_india_japan_v1",
+  "raw_dataset_path": "data/external/rdd2022/raw",
+  "output_path": "data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1",
+  "canonical_content_fingerprint": {
+    "content_tree_sha256": "00eaeb448d52ae0fe7b82262ded4acfc1ea101af20377c932e90ae6e58ddcd6c",
+    "file_count": 48,
+    "total_bytes": 113019361
+  },
+  "parent_content_fingerprint": {
+    "content_tree_sha256": "4816977c98861bef1566cf5dd8a30fb29b00fc8a392e53c8dbcbb1b4ea42249a",
+    "file_count": 32,
+    "total_bytes": 101514658
+  },
+  "raw_metadata_fingerprint": {
+    "metadata_fingerprint_sha256": "28468bf6939dcb3a854eca342b043e7a36a6428d83701013d6f26f995ca3290a",
+    "file_count": 41010,
+    "total_bytes": 1733250527
+  },
+  "split_names": ["train", "val", "test"],
+  "taxonomy": [
+    {"id": 0, "raw_code": "D00", "name": "D00_longitudinal_crack"},
+    {"id": 1, "raw_code": "D10", "name": "D10_transverse_crack"},
+    {"id": 2, "raw_code": "D20", "name": "D20_alligator_crack"},
+    {"id": 3, "raw_code": "D40", "name": "D40_pothole"}
+  ],
+  "label_decimal_places": 8,
+  "image_copy_policy": "byte_identical_copy_no_recompression_no_hardlinks",
+  "copy_workers": 4,
+  "label_write_workers": 16,
+  "expected": {
+    "split_image_counts": {"train": 12620, "val": 2602, "test": 2775},
+    "positive_images": 11068,
+    "negative_images": {"train": 4883, "val": 983, "test": 1063},
+    "target_objects": {
+      "train": {"D00": 3923, "D10": 2914, "D20": 5703, "D40": 3756},
+      "val": {"D00": 822, "D10": 576, "D20": 1188, "D40": 791},
+      "test": {"D00": 841, "D10": 557, "D20": 1297, "D40": 840}
+    },
+    "total_target_objects": {"D00": 5586, "D10": 4047, "D20": 8188, "D40": 5387},
+    "total_target_object_count": 23208,
+    "official_unlabelled_test_images": 4586,
+    "guard_excluded_images": 210,
+    "quarantined_images": 5
+  },
+  "visual_qa": {
+    "enabled": true,
+    "thumbnail_width": 280,
+    "thumbnail_height": 280,
+    "columns": 4,
+    "jpeg_quality": 95,
+    "size_examples_per_extreme": 6,
+    "edge_examples": 8,
+    "zero_edge_examples": 16,
+    "mixed_examples": 8,
+    "negative_examples": 8
+  }
+}

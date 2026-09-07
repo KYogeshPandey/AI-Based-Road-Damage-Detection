@@ -1,0 +1,19 @@
+{
+  "schema_version": "3B.smoke_subset.v1",
+  "seed": 42,
+  "source_dataset_path": "data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1",
+  "output_path": "outputs/training/phase3b_smoke/dataset",
+  "splits": {
+    "train": {"positive": 80, "negative": 48},
+    "val": {"positive": 40, "negative": 24}
+  },
+  "countries": ["India", "Japan"],
+  "taxonomy": [
+    {"id": 0, "name": "D00_longitudinal_crack"},
+    {"id": 1, "name": "D10_transverse_crack"},
+    {"id": 2, "name": "D20_alligator_crack"},
+    {"id": 3, "name": "D40_pothole"}
+  ],
+  "minimum_india_d10_positive_images_per_split": 2,
+  "copy_policy": "byte_identical_copy_no_hardlinks"
+}
