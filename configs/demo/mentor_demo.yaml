@@ -1,0 +1,30 @@
+{
+  "schema_version": "mentor_demo.v1",
+  "model": {
+    "path": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/best.pt",
+    "sha256": "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7",
+    "size_bytes": 22524074
+  },
+  "inference": {
+    "imgsz": 640,
+    "confidence": 0.25,
+    "nms_iou": 0.70,
+    "max_detections": 300,
+    "device": 0
+  },
+  "classes": {
+    "0": "D00_longitudinal_crack",
+    "1": "D10_transverse_crack",
+    "2": "D20_alligator_crack",
+    "3": "D40_pothole"
+  },
+  "output_path": "outputs/demo/mentor_live",
+  "mentor_samples": {
+    "validation_images": "data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1/images/val",
+    "validation_labels": "data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1/labels/val",
+    "output_path": "outputs/demo/mentor_samples",
+    "images_per_class": 2,
+    "negative_images": 2,
+    "seed": 42
+  }
+}
