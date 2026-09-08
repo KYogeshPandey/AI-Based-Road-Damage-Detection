@@ -72,8 +72,12 @@ def launch_baseline(
         inspection = inspect_checkpoint(resume)
         validate_resume_checkpoint(inspection, config, paths)
         verify_recorded_fingerprints(paths, fingerprints)
-        verify_recorded_git_state(paths, git_state)
-        record_resume_attempt(paths, inspection, environment, git_state)
+        source_transition = verify_recorded_git_state(
+            paths, git_state, config, source_state, inspection
+        )
+        record_resume_attempt(
+            paths, inspection, environment, git_state, source_transition
+        )
         LOGGER.info(
             "Resuming the same run from completed epoch %s: %s",
             inspection["completed_epoch_number"],

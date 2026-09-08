@@ -1,0 +1,38 @@
+{
+  "schema_version": "baseline_public_v1.resume_hotfix_policy.v1",
+  "policy_id": "baseline_public_v1.ultralytics_resumed_model_path.v1",
+  "experiment_id": "baseline_public_v1_yolov8s",
+  "reason": "legitimate Ultralytics resumed checkpoint model-path transition",
+  "original_training_freeze": {
+    "commit": "80916642e45fe00bcc9a6054dea2cce3ea55e6a7",
+    "branch": "master",
+    "source_tree_sha256": "1e94e69c6a7e4b1532d764d41a05118c2cd78e6a3aa40aab2bb1829e512858da",
+    "epochs_covered": "human epochs 1-46"
+  },
+  "resume_infrastructure_hotfix": {
+    "commit": "resolved from clean Git HEAD at resume time",
+    "source_tree_sha256": "dc631672a1cc4171c6ec6876cdc629157c5e006b599926dd0339dde6660bf43b",
+    "allowed_files": [
+      "reproducibility/baseline_public_v1_resume_hotfix_policy.json",
+      "reproducibility/baseline_public_v1_source_state_manifest.json",
+      "road-damage-project-docs/BASELINE_PUBLIC_V1_RUNBOOK.md",
+      "src/road_damage/training/baseline_support.py",
+      "src/road_damage/training/train_baseline.py",
+      "tests/test_baseline_training.py"
+    ]
+  },
+  "unchanged_identities": {
+    "scientific_config_path": "configs/training/baseline_public_v1_yolov8s.yaml",
+    "scientific_config_sha256": "0bc019775c64465862486f436c6b65848bc76a8442f573ed1c4498c24c557a10",
+    "dataset_export_fingerprints_path": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/reproducibility/dataset_export_fingerprints.json",
+    "dataset_export_fingerprints_sha256": "dd1c05039e29ebfca0e08e2f3140f72ed381173da47844c67370551194a49e7c",
+    "pretrained_model_path": "models/pretrained/yolov8s.pt",
+    "pretrained_model_sha256": "1f47a78bf100391c2a140b7ac73a1caae18c32779be7d310658112f7ac9aa78a"
+  },
+  "approved_initial_resume_checkpoint": {
+    "path": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/last.pt",
+    "sha256": "09a54a3a785e69f9510e6f2458e84c95024f2e44fca7e361a6e6213f7339936e",
+    "completed_epoch_number": 46,
+    "next_epoch_number": 47
+  }
+}

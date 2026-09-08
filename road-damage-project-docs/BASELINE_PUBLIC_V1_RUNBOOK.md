@@ -70,6 +70,10 @@ Only after the inspection passes, run:
 
 The launcher accepts only that exact run's `weights/last.pt`. It checks that the checkpoint remains resumable, targets 100 epochs, retains the original scientific parameters, matches the run/output identity, and refers to unchanged dataset/export fingerprints. It then calls Ultralytics with only `resume=<absolute last.pt>`; it does not start another run or replace resume parameters.
 
+Ultralytics 8.4.130 rewrites `train_args.model` to the authoritative `last.pt` path during a genuine resume and saves that value into subsequent checkpoints. Resume validation therefore accepts exactly two model-field values: the configured original `models/pretrained/yolov8s.pt`, or this experiment's exact `weights/last.pt`. Any other run, smoke checkpoint, architecture, or arbitrary weight path remains prohibited. The original pretrained checkpoint is independently verified against both its pinned SHA-256 and the fresh-start run manifest.
+
+Human epochs 1-46 were trained under Git commit `80916642e45fe00bcc9a6054dea2cce3ea55e6a7` and source fingerprint `1e94e69c6a7e4b1532d764d41a05118c2cd78e6a3aa40aab2bb1829e512858da`. The non-scientific multi-resume launcher correction is governed by `reproducibility/baseline_public_v1_resume_hotfix_policy.json`. On its first use, the launcher requires the byte-identical epoch-46 checkpoint approved by that policy. It then records the user's clean hotfix commit, both source fingerprints, unchanged config/model/dataset identities, the pre-resume checkpoint hash, reason, and exact hotfix file list in the session record. Later resumes must use the same hotfix commit. There is no force or generic Git-bypass option.
+
 Confirm in the Ultralytics console that a checkpoint interrupted after completed epoch 20 continues at epoch 21. Repeat the same procedure after completed epochs 40, 60, and 80. Do not change scientific training parameters between sessions.
 
 ## Operational cautions

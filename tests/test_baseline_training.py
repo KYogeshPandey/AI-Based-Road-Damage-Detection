@@ -24,7 +24,9 @@ from road_damage.training.baseline_support import (  # noqa: E402
     build_resume_ultralytics_args,
     ensure_fresh_run_available,
     load_baseline_config,
+    record_resume_attempt,
     resolve_baseline_paths,
+    validate_resume_hotfix_changed_files,
     validate_resume_checkpoint,
     verify_file_sha256,
 )
@@ -420,6 +422,62 @@ class EarlyStoppingContinuityTests(unittest.TestCase):
 
 
 class CheckpointAndLauncherResumeTests(unittest.TestCase):
+    def test_three_process_sessions_accept_ultralytics_model_path_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = load_baseline_config(CONFIG_PATH)
+            paths = _temporary_paths(root, config)
+
+            # Session A starts fresh and writes the original pretrained path.
+            checkpoint, _ = _write_resumable_fixture(config, paths, epoch=19)
+            session_b = inspect_checkpoint(checkpoint)
+            self.assertEqual(Path(session_b["train_args"]["model"]), paths.model)
+            validate_resume_checkpoint(session_b, config, paths)
+
+            # Session B genuinely resumes and Ultralytics writes last.pt as model.
+            _write_checkpoint(
+                checkpoint,
+                config,
+                paths,
+                epoch=45,
+                override_args={"model": str(checkpoint.resolve())},
+            )
+            _write_state(checkpoint, paths, checkpoint_epoch=45, best_epoch=45)
+
+            # Session C validates the new last.pt and must be allowed to resume again.
+            session_c = inspect_checkpoint(checkpoint)
+            self.assertEqual(
+                Path(session_c["train_args"]["model"]), checkpoint.resolve()
+            )
+            self.assertEqual(session_c["completed_epoch_number"], 46)
+            validate_resume_checkpoint(session_c, config, paths)
+
+    def test_resume_model_allowlist_rejects_cross_run_smoke_and_arbitrary_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = load_baseline_config(CONFIG_PATH)
+            paths = _temporary_paths(root, config)
+            rejected_models = (
+                paths.output_base / "another_run" / "weights" / "last.pt",
+                root / "outputs" / "training" / "phase3b_smoke" / "weights" / "last.pt",
+                root / "arbitrary" / "model.pt",
+                root / "models" / "pretrained" / "yolo26s.pt",
+            )
+            for rejected_model in rejected_models:
+                with self.subTest(model=str(rejected_model)):
+                    checkpoint, _ = _write_resumable_fixture(
+                        config,
+                        paths,
+                        override_args={"model": str(rejected_model)},
+                    )
+                    report = inspect_checkpoint(checkpoint)
+                    self.assertTrue(report["appears_resumable"])
+                    with self.assertRaisesRegex(
+                        BaselineTrainingError,
+                        "original configured pretrained model or this run's authoritative last.pt",
+                    ):
+                        validate_resume_checkpoint(report, config, paths)
+
     def test_amp_scaler_present_allows_resume_when_other_state_is_complete(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -705,6 +763,102 @@ class GitIgnorePolicyTests(unittest.TestCase):
                 self.assertTrue(is_ignored(probe), probe)
             for probe in trackable_probes:
                 self.assertFalse(is_ignored(probe), probe)
+
+
+class ResumeHotfixProvenanceTests(unittest.TestCase):
+    def test_hotfix_policy_retains_original_provenance_literals(self) -> None:
+        policy_path = (
+            PROJECT_ROOT
+            / "reproducibility"
+            / "baseline_public_v1_resume_hotfix_policy.json"
+        )
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            policy["original_training_freeze"],
+            {
+                "commit": "80916642e45fe00bcc9a6054dea2cce3ea55e6a7",
+                "branch": "master",
+                "source_tree_sha256": "1e94e69c6a7e4b1532d764d41a05118c2cd78e6a3aa40aab2bb1829e512858da",
+                "epochs_covered": "human epochs 1-46",
+            },
+        )
+        self.assertEqual(
+            policy["unchanged_identities"]["scientific_config_sha256"],
+            "0bc019775c64465862486f436c6b65848bc76a8442f573ed1c4498c24c557a10",
+        )
+        self.assertEqual(
+            policy["unchanged_identities"]["pretrained_model_sha256"],
+            "1f47a78bf100391c2a140b7ac73a1caae18c32779be7d310658112f7ac9aa78a",
+        )
+        self.assertEqual(
+            policy["approved_initial_resume_checkpoint"]["sha256"],
+            "09a54a3a785e69f9510e6f2458e84c95024f2e44fca7e361a6e6213f7339936e",
+        )
+
+    def test_hotfix_file_allowlist_is_exact_and_has_no_generic_bypass(self) -> None:
+        exact_files = (
+            "reproducibility/baseline_public_v1_resume_hotfix_policy.json",
+            "reproducibility/baseline_public_v1_source_state_manifest.json",
+            "road-damage-project-docs/BASELINE_PUBLIC_V1_RUNBOOK.md",
+            "src/road_damage/training/baseline_support.py",
+            "src/road_damage/training/train_baseline.py",
+            "tests/test_baseline_training.py",
+        )
+        self.assertEqual(
+            validate_resume_hotfix_changed_files(exact_files), sorted(exact_files)
+        )
+        with self.assertRaises(BaselineTrainingError):
+            validate_resume_hotfix_changed_files((*exact_files, "src/unrelated.py"))
+        with self.assertRaises(BaselineTrainingError):
+            validate_resume_hotfix_changed_files(exact_files[:-1])
+
+    def test_resume_attempt_records_both_commits_and_source_fingerprints(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = load_baseline_config(CONFIG_PATH)
+            paths = _temporary_paths(root, config)
+            reproducibility = paths.run_dir / "reproducibility"
+            reproducibility.mkdir(parents=True)
+            (reproducibility / "resume_history.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "baseline_public_v1.resume_history.v1",
+                        "sessions": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            transition = {
+                "mode": "approved_resume_infrastructure_hotfix",
+                "policy_id": "baseline_public_v1.ultralytics_resumed_model_path.v1",
+                "original_training_freeze_commit": "80916642e45fe00bcc9a6054dea2cce3ea55e6a7",
+                "resume_infrastructure_hotfix_commit": "b" * 40,
+                "original_source_tree_sha256": "1e94e69c6a7e4b1532d764d41a05118c2cd78e6a3aa40aab2bb1829e512858da",
+                "post_hotfix_source_tree_sha256": "c" * 64,
+            }
+            record_resume_attempt(
+                paths,
+                {
+                    "sha256": "d" * 64,
+                    "completed_epoch_number": 46,
+                    "next_epoch_number": 47,
+                },
+                {"packages": []},
+                {"commit": "b" * 40},
+                transition,
+            )
+            history = json.loads(
+                (reproducibility / "resume_history.json").read_text(encoding="utf-8")
+            )
+            summary = history["sessions"][0]["source_transition"]
+            self.assertEqual(
+                summary["original_training_freeze_commit"],
+                "80916642e45fe00bcc9a6054dea2cce3ea55e6a7",
+            )
+            self.assertEqual(summary["resume_infrastructure_hotfix_commit"], "b" * 40)
+            session_path = Path(history["sessions"][0]["session_record"])
+            session = json.loads(session_path.read_text(encoding="utf-8"))
+            self.assertEqual(session["source_transition"], transition)
 
 
 if __name__ == "__main__":

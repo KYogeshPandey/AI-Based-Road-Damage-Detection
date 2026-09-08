@@ -24,8 +24,8 @@
     "temporary files"
   ],
   "file_count": 52,
-  "total_bytes": 676191,
-  "source_tree_sha256": "1e94e69c6a7e4b1532d764d41a05118c2cd78e6a3aa40aab2bb1829e512858da",
+  "total_bytes": 697146,
+  "source_tree_sha256": "dc631672a1cc4171c6ec6876cdc629157c5e006b599926dd0339dde6660bf43b",
   "files": [
     {
       "path": ".gitignore",
@@ -99,8 +99,8 @@
     },
     {
       "path": "road-damage-project-docs/BASELINE_PUBLIC_V1_RUNBOOK.md",
-      "size_bytes": 6617,
-      "sha256": "d9c65b5e883e7738b01f987bccef061fdcfc6cb09e159f16d3d695cbe832224a"
+      "size_bytes": 7885,
+      "sha256": "d54f840ae3d6189ed6664b9d3d275fad16af3714ce78a1a103c8985384aa121a"
     },
     {
       "path": "road-damage-project-docs/DATASET_GUIDELINES.md",
@@ -199,8 +199,8 @@
     },
     {
       "path": "src/road_damage/training/baseline_support.py",
-      "size_bytes": 27070,
-      "sha256": "2a00e050306ccd40a5a17d12fe9c18b5959f0cb9b4643b899f2dc672ad0757ff"
+      "size_bytes": 39329,
+      "sha256": "0b23308b9345bbc734c70951b01bd8cfc6a655f35376ababc787f95302b754cd"
     },
     {
       "path": "src/road_damage/training/create_smoke_subset.py",
@@ -224,8 +224,8 @@
     },
     {
       "path": "src/road_damage/training/train_baseline.py",
-      "size_bytes": 4626,
-      "sha256": "414388e64e10230fadc511640828d64a57795c4f1338e6765c4d0e25b9ed8074"
+      "size_bytes": 4743,
+      "sha256": "15233f2f9f0882d6d053a8851d5f219f522cb59eafdfb98610f2b913067b0de2"
     },
     {
       "path": "src/road_damage/video/__init__.py",
@@ -249,8 +249,8 @@
     },
     {
       "path": "tests/test_baseline_training.py",
-      "size_bytes": 29096,
-      "sha256": "49f5d6376675d25d0cb382e33be9ea4597ee04fbfa8c001d9b032a464cf5267c"
+      "size_bytes": 36407,
+      "sha256": "3d88f6f79e34a9de0c4966a43376789fec1ecda535d7b166fbfcf626c6f8adf8"
     },
     {
       "path": "tests/test_create_smoke_subset.py",
