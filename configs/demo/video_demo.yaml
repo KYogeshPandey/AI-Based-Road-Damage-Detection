@@ -1,0 +1,28 @@
+{
+  "schema_version": "video_demo.v1",
+  "model": {
+    "path": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/best.pt",
+    "sha256": "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7",
+    "size_bytes": 22524074
+  },
+  "inference": {
+    "imgsz": 640,
+    "device": 0,
+    "confidence": 0.25,
+    "nms_iou": 0.70,
+    "augment": false,
+    "max_detections": 300
+  },
+  "classes": {
+    "0": "D00_longitudinal_crack",
+    "1": "D10_transverse_crack",
+    "2": "D20_alligator_crack",
+    "3": "D40_pothole"
+  },
+  "operating_point_status": "provisional_demo",
+  "output_path": "outputs/demo/video",
+  "codec_candidates": [{"fourcc": "mp4v", "suffix": ".mp4"}, {"fourcc": "MJPG", "suffix": ".avi"}],
+  "progress_every_frames": 100,
+  "display_max_width": 1280,
+  "display_max_height": 800
+}
