@@ -1,0 +1,23 @@
+{
+  "schema_version": "baseline_public_v1.threshold_selection.v1",
+  "model": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/best.pt",
+  "model_size_bytes": 22524074,
+  "model_sha256": "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7",
+  "validation_yaml": "configs/training/baseline_public_v1_train_val.yaml",
+  "expected_counts": {"images": 2602, "targets": 3377, "negative_images": 983},
+  "classes": {"0": "D00_longitudinal_crack", "1": "D10_transverse_crack", "2": "D20_alligator_crack", "3": "D40_pothole"},
+  "imgsz": 640,
+  "device": 0,
+  "inference_confidence_floor": 0.01,
+  "confidence_grid": {"start_percent": 1, "stop_percent": 80, "step_percent": 1},
+  "nms_iou_candidates": [0.50, 0.60, 0.70],
+  "matching_iou": 0.50,
+  "global_threshold_only": true,
+  "augment": false,
+  "half": false,
+  "max_det": 300,
+  "seed": 42,
+  "progress_every": 100,
+  "output": "outputs/evaluation/baseline_public_v1_threshold_selection",
+  "recompute_output": "outputs/evaluation/baseline_public_v1_threshold_selection_recomputed"
+}
