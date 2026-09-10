@@ -1,0 +1,50 @@
+{
+  "schema_version": "baseline_public_v1.frozen_internal_test.v2",
+  "frozen_at_utc": "2026-09-09T17:33:29+00:00",
+  "model": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/best.pt",
+  "model_size_bytes": 22524074,
+  "model_sha256": "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7",
+  "confidence": 0.19,
+  "nms_iou": 0.50,
+  "matching_iou": 0.50,
+  "classes": {"0": "D00_longitudinal_crack", "1": "D10_transverse_crack", "2": "D20_alligator_crack", "3": "D40_pothole"},
+  "selection": {
+    "validation_only": true,
+    "internal_test_untouched": true,
+    "commit": "027f5f41c386f558319799fa8784b32cf3dcefdb",
+    "timestamp": "2026-09-09T17:16:17.442283+00:00",
+    "macro_f1": 0.5055312316193121,
+    "per_class_f1": {"D00": 0.4257703081232493, "D10": 0.4652908067542214, "D20": 0.6515151515151515, "D40": 0.4795486600846262},
+    "negative_images": 983,
+    "negative_fp": 121,
+    "negative_fp_per_image": 0.12309257375381485,
+    "negative_images_with_fp": 96,
+    "negative_images_with_fp_fraction": 0.09766022380467955,
+    "selected_artifact_sha256": "5220c1ebcc17b99b5e1d46076024a4c592a5f636fe072a42759431a29f0eea45",
+    "evaluation_manifest_sha256": "8950cd975469d89344a6d26903dce3d48314eaded4ee93bdf10649ddfffc5bdb"
+  },
+  "export": "data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1",
+  "approved_metadata_sha256": {
+    "export_manifest.json": "cf6c46454d20d7e6a033b5f47a09c77b971c620517d0f4b4b24104939aa0e1c6",
+    "export_report.json": "f6054fd350fb9a2702f252062c7238d0cdb0dee4e3626d33bb532c8e9c3a9e14",
+    "validation_report.json": "4291d4f213a3e1e22b8a4728bbefcf8c6d6ad9e24ec4b9efe6c9ce4e534411a2"
+  },
+  "expected_counts": {
+    "images": 2775, "positive_images": 1712, "negative_images": 1063, "targets": 3535,
+    "countries": {"India": 1116, "Japan": 1659},
+    "class_boxes": {"D00": 841, "D10": 557, "D20": 1297, "D40": 840}
+  },
+  "imgsz": 640,
+  "device": 0,
+  "standard_ap_confidence_floor": 0.001,
+  "standard_ap_matching_ious": [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95],
+  "ultralytics_version": "8.4.130",
+  "batch": 1, "rect": false, "half": false, "augment": false,
+  "max_det": 300, "seed": 42, "progress_every": 100,
+  "output": "outputs/evaluation/baseline_public_v1_internal_test",
+  "attempt_receipt": "outputs/evaluation/baseline_public_v1_internal_test_attempt.json",
+  "evaluation_branches": ["framework_validator", "frozen_prediction_mode"],
+  "validator_multi_label": true,
+  "validator_workers": 0,
+  "policy": "one_frozen_identity_technical_recovery_only_completed_lock"
+}
