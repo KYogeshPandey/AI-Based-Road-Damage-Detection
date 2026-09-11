@@ -7,8 +7,8 @@
   },
   "inference": {
     "imgsz": 640,
-    "confidence": 0.25,
-    "nms_iou": 0.70,
+    "confidence": 0.19,
+    "nms_iou": 0.50,
     "max_detections": 300,
     "device": 0
   },
@@ -18,6 +18,7 @@
     "2": "D20_alligator_crack",
     "3": "D40_pothole"
   },
+  "operating_point_status": "frozen_validation_selected",
   "output_path": "outputs/demo/mentor_live",
   "mentor_samples": {
     "validation_images": "data/exports/rdd2022_india_japan_v1_1/yolo_detection_v1/images/val",

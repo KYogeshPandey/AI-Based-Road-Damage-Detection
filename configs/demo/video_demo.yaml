@@ -8,8 +8,8 @@
   "inference": {
     "imgsz": 640,
     "device": 0,
-    "confidence": 0.25,
-    "nms_iou": 0.70,
+    "confidence": 0.19,
+    "nms_iou": 0.50,
     "augment": false,
     "max_detections": 300
   },
@@ -19,7 +19,7 @@
     "2": "D20_alligator_crack",
     "3": "D40_pothole"
   },
-  "operating_point_status": "provisional_demo",
+  "operating_point_status": "frozen_validation_selected",
   "output_path": "outputs/demo/video",
   "codec_candidates": [{"fourcc": "mp4v", "suffix": ".mp4"}, {"fourcc": "MJPG", "suffix": ".avi"}],
   "progress_every_frames": 100,

@@ -1,8 +1,10 @@
 # Mentor Live Image Demo
 
-This demo uses only the frozen YOLOv8s `best.pt`. It verifies the checkpoint's expected 22,524,074-byte size and SHA-256 before inference, uses `imgsz=640`, confidence `0.25`, and NMS IoU `0.70`, and saves annotated images under `outputs/demo/mentor_live/` without Ultralytics `runs/detect/` nesting.
+This demo uses only the frozen YOLOv8s `best.pt`. It verifies the checkpoint's expected 22,524,074-byte size and SHA-256 before inference, uses `imgsz=640`, confidence `0.19`, and NMS IoU `0.50`, and saves annotated images under `outputs/demo/mentor_live/` without Ultralytics `runs/detect/` nesting.
 
-> **Demo threshold only — final confidence/NMS thresholds have not yet been selected through the planned validation-only threshold sweep.**
+> **Operating-point status: `frozen_validation_selected`. Final frozen validation-selected baseline operating point:** confidence `0.19`, NMS IoU `0.50`.
+
+The operating point was selected using validation data only and was frozen before the completed internal-test evaluation. The completed internal test did not alter either value. Running this demo is application inference only; its detections and saved images are not new model-evaluation results.
 
 ## Commands
 
@@ -43,8 +45,8 @@ The model trained on 12,620 images and used 2,602 validation images. The best ch
 | D20 | 0.629 | 0.653 | 0.669 | 0.340 |
 | D40 | 0.552 | 0.434 | 0.450 | 0.199 |
 
-These are validation results, not internal-test or teacher-video performance claims. The terminal's model inference time is not a full-application FPS measurement.
+These are the completed baseline's validation results, not metrics produced by the demo. The baseline internal-test evaluation is completed and locked; it did not alter the validation-selected operating point. The terminal's model inference time is not a full-application FPS measurement.
 
 ## If asked what remains
 
-The next scientific steps are the planned validation-only threshold sweep, frozen-checkpoint evaluation on the untouched internal test split, error analysis, comparison with the proposed detector, and then video tracking, event aggregation, relative visual-severity evaluation, reporting, and dashboard integration. The teacher video has not been used here as positive performance evidence.
+The remaining scientific work includes the proposed-detector comparison, video tracking, event aggregation, relative visual-severity evaluation, reporting, and dashboard integration. The completed YOLOv8s internal-test result remains locked and is not reopened by this demo. The teacher video has not been used here as positive performance evidence.

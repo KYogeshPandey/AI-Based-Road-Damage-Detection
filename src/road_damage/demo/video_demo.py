@@ -25,8 +25,9 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from road_damage.demo.mentor_demo import (  # noqa: E402
-    CLASS_NAMES, FROZEN_MODEL_RELATIVE_PATH, FROZEN_MODEL_SHA256,
-    FROZEN_MODEL_SIZE_BYTES, Detection, MentorDemoError, _annotate_image,
+    CLASS_NAMES, FROZEN_CONFIDENCE, FROZEN_MODEL_RELATIVE_PATH, FROZEN_MODEL_SHA256,
+    FROZEN_MODEL_SIZE_BYTES, FROZEN_NMS_IOU, FROZEN_OPERATING_POINT_NOTICE,
+    FROZEN_OPERATING_POINT_STATUS, Detection, MentorDemoError, _annotate_image,
     _detections_from_result, _validate_model_class_names, sha256_file, verify_model_identity,
 )
 
@@ -38,17 +39,13 @@ OUTPUT_PATH = Path("outputs/demo/video")
 VIDEO_SUFFIXES = {".avi", ".mp4", ".mov", ".mkv", ".mpeg", ".mpg", ".wmv", ".webm", ".m4v"}
 CSV_FIELDS = ("frame_index", "timestamp_seconds", "class_id", "class_name", "confidence",
               "x1", "y1", "x2", "y2")
-PROVISIONAL_NOTICE = (
-    "Provisional demo operating point. Final confidence/NMS thresholds will be "
-    "selected through validation-only threshold optimization."
-)
 SCIENTIFIC_NOTICE = (
     "Raw frame detections are not unique physical damage events or ground-truth accuracy. "
     "The teacher video has no reliably confirmed V1-positive D00/D10/D20/D40 events; "
     "use it only as an application/domain/false-positive demonstration, not labelled "
     "positive evaluation or target-domain recall evidence."
 )
-WINDOW_NAME = "Road Damage Video Demo - q/Esc to stop (provisional thresholds)"
+WINDOW_NAME = "Road Damage Video Demo - frozen_validation_selected 0.19/0.50 - q/Esc to stop"
 
 
 class VideoDemoError(RuntimeError):
@@ -60,6 +57,7 @@ class VideoConfig:
     model_path: Path
     confidence: float
     nms_iou: float
+    operating_point_status: str
     max_detections: int
     codecs: tuple[tuple[str, str], ...]
     progress_every: int
@@ -98,11 +96,16 @@ def load_video_config(root: Path = ROOT) -> VideoConfig:
         if (inference["imgsz"] != 640 or inference["device"] != 0
                 or inference["augment"] is not False):
             raise VideoDemoError("Video demo requires imgsz=640, device=0, augment=False.")
-        if raw["output_path"] != OUTPUT_PATH.as_posix() or raw["operating_point_status"] != "provisional_demo":
-            raise VideoDemoError("Video output path or provisional operating-point declaration changed.")
+        if (raw["output_path"] != OUTPUT_PATH.as_posix()
+                or raw["operating_point_status"] != FROZEN_OPERATING_POINT_STATUS):
+            raise VideoDemoError("Video output path or frozen operating-point declaration changed.")
         conf, nms = float(inference["confidence"]), float(inference["nms_iou"])
         if not (math.isfinite(conf) and 0 < conf <= 1 and math.isfinite(nms) and 0 < nms <= 1):
             raise VideoDemoError("Confidence and NMS IoU must be finite numbers in (0,1].")
+        if (conf, nms) != (FROZEN_CONFIDENCE, FROZEN_NMS_IOU):
+            raise VideoDemoError(
+                "Video demo requires the frozen validation-selected confidence/NMS operating point."
+            )
         numeric_keys = [inference["max_detections"], raw["progress_every_frames"],
                         raw["display_max_width"], raw["display_max_height"]]
         if any(type(value) is not int or value <= 0 for value in numeric_keys):
@@ -110,7 +113,8 @@ def load_video_config(root: Path = ROOT) -> VideoConfig:
         codecs = tuple((item["fourcc"], item["suffix"]) for item in raw["codec_candidates"])
         if codecs != (("mp4v", ".mp4"), ("MJPG", ".avi")):
             raise VideoDemoError("Codec candidates must be mp4v/MP4 then MJPG/AVI.")
-        return VideoConfig(Path(model["path"]), conf, nms, numeric_keys[0], codecs,
+        return VideoConfig(Path(model["path"]), conf, nms, raw["operating_point_status"],
+                           numeric_keys[0], codecs,
                            numeric_keys[1], numeric_keys[2], numeric_keys[3])
     except (OSError, ValueError, TypeError, KeyError) as exc:
         raise VideoDemoError(f"Cannot read video demo configuration: {root / CONFIG_PATH}") from exc
@@ -317,7 +321,7 @@ def run_video(
     display_active = display
     display_worked = display_failed = False
     loop_seconds = 0.
-    LOGGER.info(PROVISIONAL_NOTICE)
+    LOGGER.info(FROZEN_OPERATING_POINT_NOTICE)
     LOGGER.info(SCIENTIFIC_NOTICE)
     try:
         capture = cv2.VideoCapture(str(source))
@@ -350,8 +354,9 @@ def run_video(
                    "max_frames": max_frames, "display_requested": display,
                    "demo_confidence": config.confidence, "demo_nms_iou": config.nms_iou,
                    "imgsz": 640, "device": 0, "augment": False,
-                   "class_mapping": CLASS_NAMES, "operating_point_status": "provisional_demo",
-                   "provisional_threshold_disclaimer": PROVISIONAL_NOTICE,
+                   "class_mapping": CLASS_NAMES,
+                   "operating_point_status": config.operating_point_status,
+                   "frozen_operating_point_declaration": FROZEN_OPERATING_POINT_NOTICE,
                    "scientific_limitations": SCIENTIFIC_NOTICE,
                    "audio_preserved": False, "csv_path": str(paths.csv),
                    **provenance(root, config)}

@@ -105,10 +105,30 @@ class VideoDemoTests(unittest.TestCase):
     def test_frozen_model_mapping_and_default_demo_thresholds(self) -> None:
         self.assertEqual(self.config.model_path.as_posix(),
                          "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/best.pt")
-        self.assertEqual((self.config.confidence, self.config.nms_iou), (.25, .70))
+        self.assertEqual((self.config.confidence, self.config.nms_iou), (.19, .50))
+        self.assertEqual(self.config.operating_point_status, "frozen_validation_selected")
+        self.assertIn("frozen_validation_selected", demo.FROZEN_OPERATING_POINT_NOTICE)
+        self.assertIn("frozen_validation_selected", demo.WINDOW_NAME)
         self.assertEqual(demo.FROZEN_MODEL_SIZE_BYTES, 22524074)
         self.assertEqual(demo.FROZEN_MODEL_SHA256,
                          "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7")
+
+    def test_config_rejects_provisional_thresholds_and_status(self) -> None:
+        original = json.loads((ROOT / demo.CONFIG_PATH).read_text(encoding="utf-8"))
+        for field, value in (("confidence", .25), ("nms_iou", .70),
+                             ("operating_point_status", "provisional_demo")):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                path = root / demo.CONFIG_PATH
+                path.parent.mkdir(parents=True)
+                changed = json.loads(json.dumps(original))
+                if field == "operating_point_status":
+                    changed[field] = value
+                else:
+                    changed["inference"][field] = value
+                path.write_text(json.dumps(changed), encoding="utf-8")
+                with self.assertRaises(demo.VideoDemoError):
+                    demo.load_video_config(root)
 
     def test_model_path_and_sha_enforcement(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -183,11 +203,19 @@ class VideoDemoTests(unittest.TestCase):
             self.assertEqual(summary["source_sha256"], source_hash)
             self.assertEqual(demo.sha256_file(source), source_hash)
             self.assertIn("not unique physical damage events", summary["scientific_limitations"])
-            self.assertIn("Provisional demo", summary["provisional_threshold_disclaimer"])
+            self.assertEqual(summary["operating_point_status"], "frozen_validation_selected")
+            self.assertIn(
+                "Final frozen validation-selected",
+                summary["frozen_operating_point_declaration"],
+            )
+            self.assertIn(
+                "completed internal test did not alter",
+                summary["frozen_operating_point_declaration"],
+            )
             self.assertEqual(model.predict.call_count, 6)
             factory.assert_called_once()
             for call in model.predict.call_args_list:
-                self.assertEqual((call.kwargs["conf"], call.kwargs["iou"], call.kwargs["imgsz"], call.kwargs["device"]), (.25, .7, 640, 0))
+                self.assertEqual((call.kwargs["conf"], call.kwargs["iou"], call.kwargs["imgsz"], call.kwargs["device"]), (.19, .5, 640, 0))
                 self.assertFalse(call.kwargs["augment"])
             with Path(summary["csv_path"]).open(newline="") as handle:
                 rows = list(csv.DictReader(handle))

@@ -7,6 +7,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -16,9 +17,14 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from road_damage.demo.mentor_demo import (  # noqa: E402
     CLASS_NAMES,
     DEMO_OUTPUT_RELATIVE_PATH,
+    FROZEN_CONFIDENCE,
     FROZEN_MODEL_RELATIVE_PATH,
     FROZEN_MODEL_SHA256,
     FROZEN_MODEL_SIZE_BYTES,
+    FROZEN_NMS_IOU,
+    FROZEN_OPERATING_POINT_NOTICE,
+    FROZEN_OPERATING_POINT_STATUS,
+    IMAGE_WINDOW_NAME,
     INTERNAL_TEST_IMAGES_RELATIVE_PATH,
     MentorDemoError,
     VALIDATION_IMAGES_RELATIVE_PATH,
@@ -30,6 +36,7 @@ from road_damage.demo.mentor_demo import (  # noqa: E402
     select_mentor_samples,
     validate_source_path,
     validate_validation_sample_directories,
+    verify_frozen_model,
     verify_model_identity,
 )
 
@@ -80,6 +87,46 @@ class MentorDemoTests(unittest.TestCase):
         self.assertEqual(dict(config.class_names), EXPECTED_CLASSES)
         self.assertEqual(config.model_path, EXPECTED_MODEL_PATH)
         self.assertEqual(config.model_sha256, EXPECTED_MODEL_SHA256)
+        self.assertEqual((config.confidence, config.nms_iou), (0.19, 0.50))
+        self.assertEqual((FROZEN_CONFIDENCE, FROZEN_NMS_IOU), (0.19, 0.50))
+        self.assertEqual(config.operating_point_status, "frozen_validation_selected")
+        self.assertEqual(FROZEN_OPERATING_POINT_STATUS, "frozen_validation_selected")
+        self.assertIn("frozen_validation_selected", FROZEN_OPERATING_POINT_NOTICE)
+        self.assertIn("frozen_validation_selected", IMAGE_WINDOW_NAME)
+
+    def test_config_rejects_provisional_thresholds_and_status(self) -> None:
+        original = json.loads(
+            (PROJECT_ROOT / "configs/demo/mentor_demo.yaml").read_text(encoding="utf-8")
+        )
+        for field, value in (
+            ("confidence", 0.25),
+            ("nms_iou", 0.70),
+            ("operating_point_status", "provisional_demo"),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                config_path = root / "configs/demo/mentor_demo.yaml"
+                config_path.parent.mkdir(parents=True)
+                changed = json.loads(json.dumps(original))
+                if field == "operating_point_status":
+                    changed[field] = value
+                else:
+                    changed["inference"][field] = value
+                config_path.write_text(json.dumps(changed), encoding="utf-8")
+                with self.assertRaises(MentorDemoError):
+                    load_demo_config(config_path, project_root=root)
+
+    def test_last_and_arbitrary_checkpoint_paths_cannot_be_selected(self) -> None:
+        config = load_demo_config()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for candidate in (root / "last.pt", root / "arbitrary/best.pt"):
+                with self.subTest(candidate=candidate), self.assertRaises(MentorDemoError):
+                    verify_frozen_model(candidate, config, project_root=root)
+            changed = replace(config, model_path=Path("last.pt"))
+            required = root / FROZEN_MODEL_RELATIVE_PATH
+            with self.assertRaises(MentorDemoError):
+                verify_frozen_model(required, changed, project_root=root)
 
     def test_source_validation_rejects_missing_unsupported_checkpoint_and_internal_test(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -30,6 +30,9 @@ FROZEN_MODEL_SHA256 = (
     "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7"
 )
 FROZEN_MODEL_SIZE_BYTES = 22_524_074
+FROZEN_CONFIDENCE = 0.19
+FROZEN_NMS_IOU = 0.50
+FROZEN_OPERATING_POINT_STATUS = "frozen_validation_selected"
 CLASS_NAMES: dict[int, str] = {
     0: "D00_longitudinal_crack",
     1: "D10_transverse_crack",
@@ -56,9 +59,15 @@ INTERNAL_TEST_IMAGES_RELATIVE_PATH = Path(
 )
 DEMO_OUTPUT_RELATIVE_PATH = Path("outputs/demo/mentor_live")
 SAMPLE_OUTPUT_RELATIVE_PATH = Path("outputs/demo/mentor_samples")
-DEMO_THRESHOLD_NOTICE = (
-    "Demo threshold only — final confidence/NMS thresholds have not yet been "
-    "selected through the planned validation-only threshold sweep."
+FROZEN_OPERATING_POINT_NOTICE = (
+    "Operating-point status: frozen_validation_selected. Final frozen "
+    "validation-selected YOLOv8s baseline operating point: "
+    "confidence 0.19, NMS IoU 0.50. The completed internal test did not alter "
+    "these values. Demo execution is application inference only; its outputs "
+    "are not new model evaluation results."
+)
+IMAGE_WINDOW_NAME = (
+    "AI Road Damage Detection — frozen_validation_selected 0.19/0.50 — Esc/q to stop"
 )
 
 
@@ -79,6 +88,7 @@ class DemoConfig:
     max_detections: int
     device: int
     class_names: Mapping[int, str]
+    operating_point_status: str
     output_path: Path
     validation_images: Path
     validation_labels: Path
@@ -187,6 +197,7 @@ def load_demo_config(
             max_detections=int(inference["max_detections"]),
             device=int(inference["device"]),
             class_names=class_names,
+            operating_point_status=str(raw["operating_point_status"]),
             output_path=Path(str(raw["output_path"])),
             validation_images=Path(str(samples["validation_images"])),
             validation_labels=Path(str(samples["validation_labels"])),
@@ -204,11 +215,12 @@ def load_demo_config(
         "model_sha256": FROZEN_MODEL_SHA256,
         "model_size_bytes": FROZEN_MODEL_SIZE_BYTES,
         "imgsz": 640,
-        "confidence": 0.25,
-        "nms_iou": 0.70,
+        "confidence": FROZEN_CONFIDENCE,
+        "nms_iou": FROZEN_NMS_IOU,
         "max_detections": 300,
         "device": 0,
         "class_names": CLASS_NAMES,
+        "operating_point_status": FROZEN_OPERATING_POINT_STATUS,
         "output_path": DEMO_OUTPUT_RELATIVE_PATH.as_posix(),
         "validation_images": VALIDATION_IMAGES_RELATIVE_PATH.as_posix(),
         "validation_labels": VALIDATION_LABELS_RELATIVE_PATH.as_posix(),
@@ -228,6 +240,7 @@ def load_demo_config(
         "max_detections": config.max_detections,
         "device": config.device,
         "class_names": dict(config.class_names),
+        "operating_point_status": config.operating_point_status,
         "output_path": config.output_path.as_posix(),
         "validation_images": config.validation_images.as_posix(),
         "validation_labels": config.validation_labels.as_posix(),
@@ -729,7 +742,9 @@ def format_image_summary(result: ImageDemoResult) -> list[str]:
             f"confidence={detection.confidence:.3f} "
             f"bbox_xyxy_pixel={detection.bbox_xyxy_pixel}"
         )
-    lines.extend([f"Annotated result saved to: {result.output_path}", DEMO_THRESHOLD_NOTICE])
+    lines.extend(
+        [f"Annotated result saved to: {result.output_path}", FROZEN_OPERATING_POINT_NOTICE]
+    )
     return lines
 
 
@@ -769,7 +784,7 @@ def run_demo(
     _validate_model_class_names(model.names)
     if write_line is not None:
         write_line(f"Frozen model SHA-256 verified: {actual_sha256}")
-        write_line(DEMO_THRESHOLD_NOTICE)
+        write_line(FROZEN_OPERATING_POINT_NOTICE)
 
     results: list[ImageDemoResult] = []
     display_available = display
@@ -819,7 +834,7 @@ def run_demo(
                     write_line(line)
             if display_available:
                 try:
-                    cv2.imshow("AI Road Damage Detection — Esc/q to stop", annotated)
+                    cv2.imshow(IMAGE_WINDOW_NAME, annotated)
                     key = cv2.waitKey(0) & 0xFF
                 except cv2.error as exc:
                     display_available = False
