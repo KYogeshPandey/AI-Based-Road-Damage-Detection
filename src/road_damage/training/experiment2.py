@@ -193,6 +193,17 @@ def verify_dataset(root: Path, config: Mapping[str, Any], *, hashes: bool = Fals
             "train_val_bytes_verified": hashes, "internal_test_files_accessed": False}
 
 
+def _preserve_dataset_cache_metadata_without_write(
+    prefix: str,
+    path: Path,
+    x: dict[str, Any],
+    version: str,
+) -> None:
+    """Preserve Ultralytics' in-memory cache schema without writing cache files."""
+    del prefix, path
+    x["version"] = version
+
+
 @contextmanager
 def offline_framework(root: Path, config: Mapping[str, Any], mode: str | None = None) -> Iterator[None]:
     """Disable framework downloads/installations/integrations and source-cache writes."""
@@ -216,7 +227,11 @@ def offline_framework(root: Path, config: Mapping[str, Any], mode: str | None = 
          patch.object(checks, "AUTOINSTALL", False), \
          patch.object(checks, "check_pip_update_available", return_value=None), \
          patch.object(callbacks, "add_integration_callbacks", return_value=None), \
-         patch.object(dataset, "save_dataset_cache_file", return_value=None):
+         patch.object(
+             dataset,
+             "save_dataset_cache_file",
+             side_effect=_preserve_dataset_cache_metadata_without_write,
+         ):
         yield
 
 

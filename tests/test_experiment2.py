@@ -202,6 +202,76 @@ class Experiment2PolicyTests(unittest.TestCase):
                     downloads.safe_download("https://example.com/weights.pt")
         self.assertIs(downloads.safe_download, original)
 
+    def test_offline_framework_preserves_rescanned_cache_metadata_without_disk_write(self):
+        import cv2
+        import numpy as np
+        from ultralytics.data.dataset import DATASET_CACHE_VERSION, YOLODataset
+
+        c = config()
+        original_callback = tool._preserve_dataset_cache_metadata_without_write
+        observed: list[dict[str, object]] = []
+
+        def capture_callback(prefix, path, x, version):
+            before_keys = set(x)
+            before_values = dict(x)
+            original_callback(prefix, path, x, version)
+            self.assertEqual(set(x), before_keys | {"version"})
+            self.assertEqual(x["version"], DATASET_CACHE_VERSION)
+            for key, value in before_values.items():
+                self.assertIs(x[key], value)
+            observed.append({"path": Path(path), "keys": set(x), "version": x["version"]})
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for case, existing_cache in (("missing", False), ("stale", True)):
+                dataset_root = root / case / "dataset"
+                image_dir = dataset_root / "images" / "train"
+                label_dir = dataset_root / "labels" / "train"
+                image_dir.mkdir(parents=True)
+                label_dir.mkdir(parents=True)
+                image_path = image_dir / "sample.jpg"
+                self.assertTrue(cv2.imwrite(str(image_path), np.full((32, 32, 3), 127, dtype=np.uint8)))
+                (label_dir / "sample.txt").write_text("0 0.5 0.5 0.25 0.25\n", encoding="utf-8")
+                cache_path = label_dir.with_suffix(".cache")
+                original_cache_bytes = None
+                if existing_cache:
+                    with cache_path.open("wb") as stream:
+                        np.save(stream, {
+                            "labels": [],
+                            "hash": "stale-cache-hash",
+                            "results": (0, 0, 0, 0, 0),
+                            "msgs": [],
+                            "version": DATASET_CACHE_VERSION,
+                        })
+                    original_cache_bytes = cache_path.read_bytes()
+
+                with patch.object(
+                    tool,
+                    "_preserve_dataset_cache_metadata_without_write",
+                    side_effect=capture_callback,
+                ) as callback, tool.offline_framework(root, c):
+                    labels = YOLODataset(
+                        img_path=str(image_dir),
+                        imgsz=32,
+                        batch_size=1,
+                        augment=False,
+                        cache=False,
+                        data={"names": dict(tool.shared.CLASS_NAMES)},
+                        task="detect",
+                    ).labels
+
+                callback.assert_called_once()
+                self.assertEqual(len(labels), 1)
+                if existing_cache:
+                    self.assertEqual(cache_path.read_bytes(), original_cache_bytes)
+                else:
+                    self.assertFalse(cache_path.exists())
+
+        self.assertEqual(len(observed), 2)
+        for record in observed:
+            self.assertEqual(record["version"], DATASET_CACHE_VERSION)
+            self.assertEqual(record["keys"], {"labels", "hash", "results", "msgs", "version"})
+
     def test_acquisition_requires_publisher_sha_before_download_or_checkpoint_loading(self):
         c = config()
         release = {"tag_name": "v8.4.0", "assets": [{"name": "yolo26s.pt", "size": 200000,

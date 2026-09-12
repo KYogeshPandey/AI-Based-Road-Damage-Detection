@@ -232,8 +232,10 @@ The run snapshots an absolute train/val-only YAML, resolved arguments, source
 state, Git commit, environment, pretrained identity, metadata fingerprints and
 smoke validation. `run_manifest.json` and `completion.json` record the same
 verified `git_commit` and `source_tree_sha256` values. Existing run directories
-are refused. Source labels/images
-are not copied or edited; framework label-cache writes are suppressed.
+are refused. Source labels/images are not copied or edited. Ultralytics dataset
+cache disk writes are suppressed, while required in-memory cache metadata such
+as the dataset cache version is preserved so a cache rescan remains valid.
+Generated cache metadata is not part of the experiment identity.
 Completion requires finite contiguous results and both best/last checkpoints.
 
 This launcher supports **fresh full training only**. Native within-process early
