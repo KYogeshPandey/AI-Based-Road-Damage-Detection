@@ -1,0 +1,17 @@
+{
+  "architecture_sha256": "b1d1fa0c69eced64f9939536038bd8d697c32e72200b34187a767de431af7ef0",
+  "family": "YOLO26",
+  "path": "models/pretrained/yolo26s.pt",
+  "publisher_asset_id": 340096060,
+  "publisher_digest": "sha256:646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+  "publisher_release": "v8.4.0",
+  "recorded_utc": "2026-09-12T18:27:50.271577+00:00",
+  "schema_version": "experiment2.pretrained_identity.v1",
+  "sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+  "size_bytes": 20422725,
+  "source": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26s.pt",
+  "task": "detect",
+  "training_started": false,
+  "ultralytics": "8.4.130",
+  "variant": "s"
+}
