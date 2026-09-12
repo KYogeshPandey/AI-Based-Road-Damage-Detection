@@ -24,7 +24,10 @@ if __package__ in (None, ""):
 from road_damage.dataset.rdd2022_common import PROJECT_ROOT, sha256_file, write_json_atomic
 from road_damage.training import baseline_support as shared
 from road_damage.training.create_smoke_subset import validate_smoke_dataset
-from road_damage.training.source_state import build_source_state_manifest
+from road_damage.training.source_state import (
+    SOURCE_STATE_MODE_COMMITTED_GIT_TREE,
+    build_source_state_manifest,
+)
 
 LOGGER = logging.getLogger(__name__)
 Error = shared.BaselineTrainingError
@@ -333,7 +336,12 @@ def verify_git(root: Path, config: Mapping[str, Any]) -> dict[str, Any]:
                    cwd=root, check=True, capture_output=True)
     subprocess.run(["git", "ls-files", "--error-unmatch", "--", *TOOLING, config["model"]["identity"]],
                    cwd=root, check=True, capture_output=True)
-    state["source_state"] = build_source_state_manifest(root)
+    source_state = build_source_state_manifest(
+        root, mode=SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+    )
+    if source_state.get("git_commit") != state["commit"]:
+        raise Error("Git HEAD changed while Experiment 2 source state was being verified.")
+    state["source_state"] = source_state
     return state
 
 
@@ -419,10 +427,26 @@ def _smoke_data(root: Path, config: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _smoke_receipt(root: Path, config: Mapping[str, Any], identity: Mapping[str, Any], source_sha: str) -> dict[str, Any]:
+def _smoke_receipt(
+    root: Path,
+    config: Mapping[str, Any],
+    identity: Mapping[str, Any],
+    source_sha: str,
+    git_commit: str,
+) -> dict[str, Any]:
     directory = run_directory(root, config, "smoke")
+    manifest = _read(directory / "run_manifest.json")
     receipt = _read(directory / "completion.json")
-    if (receipt.get("mode") != "smoke" or receipt.get("status") != "COMPLETED"
+    receipt_commit = receipt.get("git_commit")
+    if (not isinstance(git_commit, str)
+            or re.fullmatch(r"[0-9a-f]{40}", git_commit) is None
+            or not isinstance(receipt_commit, str)
+            or re.fullmatch(r"[0-9a-f]{40}", receipt_commit) is None
+            or receipt_commit != git_commit
+            or manifest.get("mode") != "smoke"
+            or manifest.get("git_commit") != receipt_commit
+            or manifest.get("source_tree_sha256") != receipt.get("source_tree_sha256")
+            or receipt.get("mode") != "smoke" or receipt.get("status") != "COMPLETED"
             or receipt.get("epochs_completed") != 1 or receipt.get("model_sha256") != identity["sha256"]
             or receipt.get("config_sha256") != CONFIG_SHA256 or receipt.get("source_tree_sha256") != source_sha
             or receipt.get("smoke_manifest_sha256") != config["smoke"]["manifest_sha256"]
@@ -449,12 +473,14 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
     if checks["blockers"]:
         raise Error(f"Preflight blocked execution: {checks['blockers']}")
     identity = checks["checks"]["pretrained_identity"]
-    source_state = checks["checks"]["git"]["source_state"]
+    git_state = checks["checks"]["git"]
+    git_commit = git_state["commit"]
+    source_state = git_state["source_state"]
     source_sha = source_state["source_tree_sha256"]
     verify_dataset(root, config, hashes=True)
     smoke = _smoke_data(root, config)
     if mode == "train":
-        _smoke_receipt(root, config, identity, source_sha)
+        _smoke_receipt(root, config, identity, source_sha, git_commit)
     data_path = _path(root, Path(config["smoke"]["dataset"]) / "data.yaml") if mode == "smoke" else _path(root, config["data"])
     data = shared.validate_train_val_yaml(data_path, _path(root,
         config["smoke"]["dataset"] if mode == "smoke" else config["source_dataset"]))
@@ -469,7 +495,8 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
     provenance = {"mode": mode, "status": "STARTED", "started_utc": shared.utc_now(),
         "config": config, "resolved_args": args, "preflight": checks, "smoke_validation": smoke,
         "model_sha256": identity["sha256"], "config_sha256": CONFIG_SHA256,
-        "source_tree_sha256": source_sha, "internal_test_files_accessed": False}
+        "git_commit": git_commit, "source_tree_sha256": source_sha,
+        "internal_test_files_accessed": False}
     write_json_atomic(directory / "run_manifest.json", provenance)
     progress: dict[str, Any] = {"batches_completed": 0, "epochs_completed": 0}
     try:
@@ -546,7 +573,8 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
                 _verify_completed_checkpoint(directory / "weights" / name, config)
         receipt = {"status": "COMPLETED", "mode": mode, **progress,
             "model_sha256": identity["sha256"], "config_sha256": CONFIG_SHA256,
-            "source_tree_sha256": source_sha, "smoke_manifest_sha256": config["smoke"]["manifest_sha256"],
+            "git_commit": git_commit, "source_tree_sha256": source_sha,
+            "smoke_manifest_sha256": config["smoke"]["manifest_sha256"],
             "dataset_metadata_sha256": config["dataset_metadata_sha256"], "artifacts": artifacts,
             "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(0),
             "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(0), "completed_utc": shared.utc_now()}

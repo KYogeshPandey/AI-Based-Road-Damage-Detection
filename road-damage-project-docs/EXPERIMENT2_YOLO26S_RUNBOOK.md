@@ -159,7 +159,11 @@ specific blockers. It verifies:
   exact four-class mapping and no YAML test entry;
 - a fresh full-run output path and writable ancestor;
 - clean Git state, ancestry after `95df7f1...`, tracked tooling/identity, and a
-  deterministic source fingerprint using the existing source-state builder.
+  deterministic source fingerprint built from blobs in the recorded committed
+  Git `HEAD` tree. Only committed files in the approved source/config/tests/docs
+  scope enter this Experiment 2 fingerprint; ignored or untracked local files,
+  including literature and research-paper artifacts, do not enter it. The commit
+  and fingerprint are bound into smoke/full-training manifests and receipts.
 
 Preflight does not read image or label contents, create output directories,
 download resources, or call `model.train`, `model.predict`, or `model.val`.
@@ -214,13 +218,21 @@ the specific cause in a reviewed correction before retrying.
 
 This fresh-run command repeats preflight and train/val byte checks, and requires
 a completed one-epoch smoke receipt with identical model/config/source/dataset
-identity and unchanged persisted checkpoint/results hashes. It then uses:
+identity and unchanged persisted checkpoint/results hashes. The smoke
+`completion.json` is bound to both the exact verified clean Git `HEAD` commit and
+the committed-tree source hash. Full training rejects the receipt when either
+value differs, including when a later commit changes only an out-of-scope path
+and therefore happens to preserve the approved-scope source hash. After any
+commit change, the previous smoke receipt cannot authorize full training. It
+then uses:
 
 `outputs/training/experiment2_yolo26s_matched/yolo26s_rdd2022-india-japan-v1.1.0_640_seed42/`.
 
 The run snapshots an absolute train/val-only YAML, resolved arguments, source
 state, Git commit, environment, pretrained identity, metadata fingerprints and
-smoke validation. Existing run directories are refused. Source labels/images
+smoke validation. `run_manifest.json` and `completion.json` record the same
+verified `git_commit` and `source_tree_sha256` values. Existing run directories
+are refused. Source labels/images
 are not copied or edited; framework label-cache writes are suppressed.
 Completion requires finite contiguous results and both best/last checkpoints.
 

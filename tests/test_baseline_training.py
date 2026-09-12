@@ -640,6 +640,8 @@ class SourceStateManifestTests(unittest.TestCase):
             first = build_source_state_manifest(root)
             second = build_source_state_manifest(root)
             self.assertEqual(first, second)
+            self.assertNotIn("mode", first)
+            self.assertNotIn("git_commit", first)
             self.assertEqual(
                 [item["path"] for item in first["files"]],
                 sorted(item["path"] for item in first["files"]),

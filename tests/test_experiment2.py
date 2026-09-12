@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -246,12 +247,114 @@ class Experiment2PolicyTests(unittest.TestCase):
             command.assert_not_called()
         with patch.object(tool.shared, "collect_git_state", return_value={"commit": "a" * 40}), \
              patch.object(tool.subprocess, "run") as command, \
-             patch.object(tool, "build_source_state_manifest", return_value={"source_tree_sha256": "b" * 64}):
+             patch.object(tool, "build_source_state_manifest", return_value={
+                 "git_commit": "a" * 40, "source_tree_sha256": "b" * 64
+             }) as source_state:
             self.assertEqual(tool.verify_git(ROOT, c)["commit"], "a" * 40)
             self.assertIn("--is-ancestor", command.call_args_list[0].args[0])
             tracked = command.call_args_list[1].args[0]
             self.assertIn("--error-unmatch", tracked)
             self.assertIn("reproducibility/experiment2_yolo26s_pretrained_identity.json", tracked)
+            source_state.assert_called_once_with(
+                ROOT, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+            )
+        with patch.object(tool.shared, "collect_git_state", return_value={"commit": "a" * 40}), \
+             patch.object(tool.subprocess, "run"), \
+             patch.object(tool, "build_source_state_manifest", return_value={
+                 "git_commit": "c" * 40, "source_tree_sha256": "b" * 64
+             }), self.assertRaises(tool.Error):
+            tool.verify_git(ROOT, c)
+
+    def test_committed_tree_source_state_excludes_untracked_and_follows_head(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+
+            def git(*args):
+                return subprocess.run(
+                    ["git", "-C", str(root), *args],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "--quiet")
+            git("config", "user.name", "Experiment 2 Test")
+            git("config", "user.email", "experiment2-test@example.invalid")
+            git("config", "commit.gpgsign", "false")
+            tracked_content = b"tracked-v1\n"
+            for directory, filename in (
+                ("src", "tracked.py"),
+                ("configs", "tracked.json"),
+                ("tests", "tracked.txt"),
+                ("road-damage-project-docs", "tracked.md"),
+            ):
+                path = root / directory / filename
+                path.parent.mkdir(parents=True)
+                path.write_bytes(tracked_content if directory == "src" else directory.encode())
+            for filename in ("AGENTS.md", "requirements.txt"):
+                (root / filename).write_text(filename, encoding="utf-8")
+            (root / ".gitignore").write_text(
+                "/road-damage-project-docs/literature/\n", encoding="utf-8"
+            )
+            git("add", "--all")
+            git("commit", "--quiet", "-m", "initial source")
+
+            first = tool.build_source_state_manifest(
+                root, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+            )
+            self.assertEqual(first["mode"], "committed_git_tree")
+            self.assertEqual(first["git_commit"], git("rev-parse", "HEAD"))
+            first_files = {item["path"]: item for item in first["files"]}
+            self.assertEqual(
+                first_files["src/tracked.py"]["sha256"], hashlib.sha256(tracked_content).hexdigest()
+            )
+
+            info_exclude = root / ".git" / "info" / "exclude"
+            with info_exclude.open("a", encoding="utf-8") as stream:
+                stream.write("/road-damage-project-docs/research-paper/\n")
+            for relative in (
+                "road-damage-project-docs/research-paper/untracked.txt",
+                "road-damage-project-docs/literature/untracked.txt",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True)
+                path.write_text("untracked", encoding="utf-8")
+
+            second = tool.build_source_state_manifest(
+                root, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+            )
+            self.assertEqual(second, first)
+            self.assertFalse(
+                any("research-paper" in item["path"] or "literature" in item["path"] for item in second["files"])
+            )
+
+            changed_content = b"tracked-v2\n"
+            (root / "src" / "tracked.py").write_bytes(changed_content)
+            self.assertEqual(
+                tool.build_source_state_manifest(
+                    root, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+                ),
+                first,
+            )
+            filesystem = tool.build_source_state_manifest(root)
+            filesystem_paths = {item["path"] for item in filesystem["files"]}
+            self.assertIn("road-damage-project-docs/research-paper/untracked.txt", filesystem_paths)
+            self.assertIn("road-damage-project-docs/literature/untracked.txt", filesystem_paths)
+            self.assertNotIn("mode", filesystem)
+            self.assertNotIn("git_commit", filesystem)
+
+            git("add", "src/tracked.py")
+            git("commit", "--quiet", "-m", "change tracked source")
+            third = tool.build_source_state_manifest(
+                root, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+            )
+            self.assertEqual(third["git_commit"], git("rev-parse", "HEAD"))
+            self.assertNotEqual(third["git_commit"], first["git_commit"])
+            self.assertNotEqual(third["source_tree_sha256"], first["source_tree_sha256"])
+            third_files = {item["path"]: item for item in third["files"]}
+            self.assertEqual(
+                third_files["src/tracked.py"]["sha256"], hashlib.sha256(changed_content).hexdigest()
+            )
 
     def test_blocked_launch_never_constructs_model_or_reserves_output(self):
         c = config()
@@ -352,9 +455,11 @@ class Experiment2PolicyTests(unittest.TestCase):
             root = Path(temp)
             directory = tool.run_directory(root, c, "smoke")
             identity = {"sha256": "a" * 64}
+            git_commit = "c" * 40
             valid = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 1,
                 "model_sha256": identity["sha256"], "config_sha256": tool.CONFIG_SHA256,
-                "source_tree_sha256": "b" * 64, "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
+                "git_commit": git_commit, "source_tree_sha256": "b" * 64,
+                "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
                 "batches_completed": 32, "optimizer_updates": 2, "amp_enabled": True, "cuda_device": "cuda:0",
                 "optimizer_state_present": True, "scaler_state_present": True,
                 "dataset_metadata_sha256": c["dataset_metadata_sha256"], "artifacts": {}}
@@ -364,21 +469,116 @@ class Experiment2PolicyTests(unittest.TestCase):
                 path.write_bytes(b"fixture")
                 valid["artifacts"][rel] = tool.sha256_file(path)
             with self.assertRaises(FileNotFoundError):
-                tool._smoke_receipt(root, c, identity, "b" * 64)
+                tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
+            manifest = {"mode": "smoke", "git_commit": git_commit,
+                        "source_tree_sha256": "b" * 64}
+            write_json(directory / "run_manifest.json", manifest)
             write_json(directory / "completion.json", valid)
-            tool._smoke_receipt(root, c, identity, "b" * 64)
+            tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
+            missing_commit = dict(valid)
+            missing_commit.pop("git_commit")
+            write_json(directory / "completion.json", missing_commit)
+            with self.assertRaises(tool.Error):
+                tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
             for key, value in (("status", "STARTED"), ("status", "FAILED_TECHNICAL"), ("epochs_completed", 2),
                                ("batches_completed", 31), ("optimizer_updates", 0), ("model_sha256", "f" * 64),
+                               ("git_commit", "not-a-git-commit"), ("git_commit", "d" * 40),
                                ("source_tree_sha256", "f" * 64), ("artifacts", {}), ("amp_enabled", False),
                                ("optimizer_state_present", False), ("scaler_state_present", False)):
                 with self.subTest(key=key, value=value):
                     write_json(directory / "completion.json", {**valid, key: value})
                     with self.assertRaises(tool.Error):
-                        tool._smoke_receipt(root, c, identity, "b" * 64)
+                        tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
             write_json(directory / "completion.json", valid)
+            for key, value in (("git_commit", "d" * 40), ("source_tree_sha256", "f" * 64)):
+                with self.subTest(manifest_key=key):
+                    write_json(directory / "run_manifest.json", {**manifest, key: value})
+                    with self.assertRaises(tool.Error):
+                        tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
+            write_json(directory / "run_manifest.json", manifest)
             (directory / "weights/last.pt").write_bytes(b"corrupt")
             with self.assertRaises(tool.Error):
-                tool._smoke_receipt(root, c, identity, "b" * 64)
+                tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
+
+    def test_smoke_receipt_rejects_new_commit_with_identical_scoped_source_hash(self):
+        c = config()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+
+            def git(*args):
+                return subprocess.run(
+                    ["git", "-C", str(root), *args],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "--quiet")
+            git("config", "user.name", "Experiment 2 Test")
+            git("config", "user.email", "experiment2-test@example.invalid")
+            git("config", "commit.gpgsign", "false")
+            for directory, filename in (
+                ("src", "tracked.py"),
+                ("configs", "tracked.yaml"),
+                ("tests", "tracked.py"),
+                ("road-damage-project-docs", "tracked.md"),
+            ):
+                path = root / directory / filename
+                path.parent.mkdir(parents=True)
+                path.write_text(directory, encoding="utf-8")
+            for filename in ("AGENTS.md", "requirements.txt"):
+                (root / filename).write_text(filename, encoding="utf-8")
+            (root / ".gitignore").write_text("# fixture\n", encoding="utf-8")
+            outside = root / "out-of-scope" / "tracked.txt"
+            outside.parent.mkdir(parents=True)
+            outside.write_text("commit A", encoding="utf-8")
+            git("add", "--all")
+            git("commit", "--quiet", "-m", "commit A")
+            state_a = tool.build_source_state_manifest(
+                root, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+            )
+
+            identity = {"sha256": "a" * 64}
+            directory = tool.run_directory(root, c, "smoke")
+            artifacts = {}
+            for relative in ("weights/last.pt", "weights/best.pt", "results.csv"):
+                path = directory / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fixture")
+                artifacts[relative] = tool.sha256_file(path)
+            write_json(directory / "completion.json", {
+                "mode": "smoke", "status": "COMPLETED", "epochs_completed": 1,
+                "model_sha256": identity["sha256"], "config_sha256": tool.CONFIG_SHA256,
+                "git_commit": state_a["git_commit"],
+                "source_tree_sha256": state_a["source_tree_sha256"],
+                "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
+                "batches_completed": 32, "optimizer_updates": 2, "amp_enabled": True,
+                "cuda_device": "cuda:0", "optimizer_state_present": True,
+                "scaler_state_present": True,
+                "dataset_metadata_sha256": c["dataset_metadata_sha256"],
+                "artifacts": artifacts,
+            })
+            write_json(directory / "run_manifest.json", {
+                "mode": "smoke", "git_commit": state_a["git_commit"],
+                "source_tree_sha256": state_a["source_tree_sha256"],
+            })
+
+            outside.write_text("commit B", encoding="utf-8")
+            git("add", "out-of-scope/tracked.txt")
+            git("commit", "--quiet", "-m", "commit B")
+            state_b = tool.build_source_state_manifest(
+                root, mode=tool.SOURCE_STATE_MODE_COMMITTED_GIT_TREE
+            )
+            self.assertNotEqual(state_b["git_commit"], state_a["git_commit"])
+            self.assertEqual(state_b["source_tree_sha256"], state_a["source_tree_sha256"])
+            with self.assertRaises(tool.Error):
+                tool._smoke_receipt(
+                    root,
+                    c,
+                    identity,
+                    state_b["source_tree_sha256"],
+                    state_b["git_commit"],
+                )
 
     def test_environment_uses_only_expected_interpreter(self):
         with patch.object(tool.sys, "executable", "C:/other/python.exe"), \
@@ -408,7 +608,8 @@ class Experiment2LaunchTests(unittest.TestCase):
                 data = {"train": str(root / "smoke/images/train"), "val": str(root / "smoke/images/val"),
                         "names": dict(tool.shared.CLASS_NAMES)}
                 report = {"blockers": {}, "checks": {"pretrained_identity": {"sha256": "a" * 64},
-                    "git": {"source_state": {"source_tree_sha256": "b" * 64}}}}
+                    "git": {"commit": "c" * 40, "source_state": {
+                        "git_commit": "c" * 40, "source_tree_sha256": "b" * 64}}}}
                 callbacks = {}
                 model = MagicMock()
                 model.add_callback.side_effect = lambda key, callback: callbacks.update({key: callback})
@@ -449,6 +650,13 @@ class Experiment2LaunchTests(unittest.TestCase):
                     self.assertEqual((directory / "completion.json").exists(), completed and readable)
                     self.assertEqual((directory / "failure.json").exists(), not (completed and readable))
                     self.assertEqual(model.train.call_args.kwargs["epochs"], 1)
+                    manifest = json.loads((directory / "run_manifest.json").read_text(encoding="utf-8"))
+                    self.assertEqual(manifest["git_commit"], "c" * 40)
+                    self.assertEqual(manifest["source_tree_sha256"], "b" * 64)
+                    if completed and readable:
+                        receipt = json.loads((directory / "completion.json").read_text(encoding="utf-8"))
+                        self.assertEqual(receipt["git_commit"], manifest["git_commit"])
+                        self.assertEqual(receipt["source_tree_sha256"], manifest["source_tree_sha256"])
 
 
 if __name__ == "__main__":
