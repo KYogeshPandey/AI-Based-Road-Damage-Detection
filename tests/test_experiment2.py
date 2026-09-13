@@ -90,7 +90,7 @@ class Experiment2PolicyTests(unittest.TestCase):
             "2": "D20_alligator_crack", "3": "D40_pothole"})
 
     def test_fraction_is_exact_float_and_type_drift_is_rejected(self):
-        expected_sha256 = "c299e47b9c04a95d3c5ddcd7215046d3a0d0118bbe05d382ac8e9211c3aadb01"
+        expected_sha256 = "6de79b610cfce4938d9d06b9aabb078cb370fe49538aceb5ef2135183f33bf02"
         c = config()
         self.assertEqual(tool.sha256_file(ROOT / tool.CONFIG), expected_sha256)
         self.assertEqual(tool.CONFIG_SHA256, expected_sha256)
@@ -354,6 +354,77 @@ class Experiment2PolicyTests(unittest.TestCase):
             for split in split_counts:
                 self.assertFalse((root / "dataset" / "labels" / f"{split}.cache").exists())
 
+    def test_optimizer_post_hook_distinguishes_skipped_amp_attempts_from_real_updates(self):
+        import torch
+
+        parameter = torch.nn.Parameter(torch.tensor([1.0]))
+        optimizer = torch.optim.SGD([parameter], lr=0.1, momentum=0.9)
+        scaler = torch.amp.GradScaler("cpu", init_scale=65536.0)
+        progress = {"optimizer_step_attempts": 0, "optimizer_updates": 0}
+        handle = tool._register_successful_optimizer_step_counter(optimizer, progress)
+        rows = [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "0.1"}]
+        try:
+            for _ in range(2):
+                optimizer.zero_grad(set_to_none=True)
+                scaler.scale(parameter.square().sum()).backward()
+                parameter.grad.fill_(float("inf"))
+                scaler.step(optimizer)
+                scaler.update()
+                progress["optimizer_step_attempts"] += 1
+
+            self.assertEqual(progress, {"optimizer_step_attempts": 2, "optimizer_updates": 0})
+            self.assertFalse(optimizer.state)
+            skipped_evidence = {**progress, "epochs_completed": 2, "batches_completed": 64,
+                "optimizer_state_present": False, "scaler_state_present": bool(scaler.state_dict())}
+            with self.assertRaises(tool.Error):
+                tool._validate_training_evidence(rows, skipped_evidence, "smoke", config())
+
+            optimizer.zero_grad(set_to_none=True)
+            scaler.scale(parameter.square().sum()).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            progress["optimizer_step_attempts"] += 1
+            self.assertEqual(progress["optimizer_updates"], 1)
+            self.assertTrue(optimizer.state)
+            self.assertIn("momentum_buffer", optimizer.state[parameter])
+            successful_evidence = {**progress, "epochs_completed": 2, "batches_completed": 64,
+                "optimizer_state_present": True, "scaler_state_present": bool(scaler.state_dict())}
+            tool._validate_training_evidence(rows, successful_evidence, "smoke", config())
+        finally:
+            handle.remove()
+
+        counted_updates = progress["optimizer_updates"]
+        optimizer.zero_grad(set_to_none=True)
+        parameter.square().sum().backward()
+        optimizer.step()
+        self.assertEqual(progress["optimizer_updates"], counted_updates)
+
+    def test_smoke_training_evidence_requires_exact_two_epoch_workload(self):
+        c = config()
+        rows = [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "0.1"}]
+        valid = {"epochs_completed": 2, "batches_completed": 64,
+            "optimizer_step_attempts": 4, "optimizer_updates": 1,
+            "optimizer_state_present": True, "scaler_state_present": True}
+        self.assertEqual(c["smoke"]["split_counts"], {"train": 128, "val": 64})
+        self.assertEqual(c["training"]["batch"], 4)
+        self.assertEqual(tool._smoke_workload(c), (2, 32, 64))
+        tool._validate_training_evidence(rows, valid, "smoke", c)
+        for case_rows, changes in (
+            (rows[:1], {"epochs_completed": 1, "batches_completed": 32}),
+            (rows, {"batches_completed": 63}),
+            (rows, {"optimizer_step_attempts": 4, "optimizer_updates": 0}),
+            (rows, {"optimizer_state_present": False}),
+        ):
+            with self.subTest(changes=changes), self.assertRaises(tool.Error):
+                tool._validate_training_evidence(case_rows, {**valid, **changes}, "smoke", c)
+        with self.assertRaises(tool.Error):
+            tool._validate_training_evidence(
+                [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "nan"}],
+                valid,
+                "smoke",
+                c,
+            )
+
     def test_acquisition_requires_publisher_sha_before_download_or_checkpoint_loading(self):
         c = config()
         release = {"tag_name": "v8.4.0", "assets": [{"name": "yolo26s.pt", "size": 200000,
@@ -587,8 +658,10 @@ class Experiment2PolicyTests(unittest.TestCase):
             root = Path(temp)
             smoke = tool.training_arguments(root, c, "smoke", root / "snapshot.yaml")
             train = tool.training_arguments(root, c, "train", root / "snapshot.yaml")
-            self.assertEqual(smoke["epochs"], 1)
+            self.assertEqual(smoke["epochs"], 2)
             self.assertEqual(train["epochs"], 100)
+            self.assertEqual(c["smoke"]["split_counts"], {"train": 128, "val": 64})
+            self.assertEqual(tool._smoke_workload(c), (2, 32, 64))
             for args in (smoke, train):
                 self.assertEqual((args["batch"], args["imgsz"], args["seed"], args["optimizer"]), (4, 640, 42, "SGD"))
                 self.assertFalse(args["resume"])
@@ -608,11 +681,13 @@ class Experiment2PolicyTests(unittest.TestCase):
             directory = tool.run_directory(root, c, "smoke")
             identity = {"sha256": "a" * 64}
             git_commit = "c" * 40
-            valid = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 1,
+            valid = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 2,
+                "internal_test_files_accessed": False,
                 "model_sha256": identity["sha256"], "config_sha256": tool.CONFIG_SHA256,
                 "git_commit": git_commit, "source_tree_sha256": "b" * 64,
                 "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
-                "batches_completed": 32, "optimizer_updates": 2, "amp_enabled": True, "cuda_device": "cuda:0",
+                "batches_completed": 64, "optimizer_step_attempts": 4, "optimizer_updates": 1,
+                "amp_enabled": True, "cuda_device": "cuda:0",
                 "optimizer_state_present": True, "scaler_state_present": True,
                 "dataset_metadata_sha256": c["dataset_metadata_sha256"], "artifacts": {}}
             for rel in ("weights/last.pt", "weights/best.pt", "results.csv"):
@@ -623,7 +698,7 @@ class Experiment2PolicyTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
             manifest = {"mode": "smoke", "git_commit": git_commit,
-                        "source_tree_sha256": "b" * 64}
+                        "source_tree_sha256": "b" * 64, "internal_test_files_accessed": False}
             write_json(directory / "run_manifest.json", manifest)
             write_json(directory / "completion.json", valid)
             tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
@@ -632,8 +707,10 @@ class Experiment2PolicyTests(unittest.TestCase):
             write_json(directory / "completion.json", missing_commit)
             with self.assertRaises(tool.Error):
                 tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
-            for key, value in (("status", "STARTED"), ("status", "FAILED_TECHNICAL"), ("epochs_completed", 2),
-                               ("batches_completed", 31), ("optimizer_updates", 0), ("model_sha256", "f" * 64),
+            for key, value in (("status", "STARTED"), ("status", "FAILED_TECHNICAL"), ("epochs_completed", 1),
+                               ("batches_completed", 32), ("batches_completed", 63),
+                               ("optimizer_step_attempts", 0), ("optimizer_updates", 0),
+                               ("model_sha256", "f" * 64),
                                ("git_commit", "not-a-git-commit"), ("git_commit", "d" * 40),
                                ("source_tree_sha256", "f" * 64), ("artifacts", {}), ("amp_enabled", False),
                                ("optimizer_state_present", False), ("scaler_state_present", False)):
@@ -651,6 +728,49 @@ class Experiment2PolicyTests(unittest.TestCase):
             (directory / "weights/last.pt").write_bytes(b"corrupt")
             with self.assertRaises(tool.Error):
                 tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
+
+    def test_smoke_receipt_requires_explicit_false_in_each_safety_record(self):
+        c = config()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory = tool.run_directory(root, c, "smoke")
+            identity = {"sha256": "a" * 64}
+            manifest = {"mode": "smoke", "git_commit": "c" * 40,
+                "source_tree_sha256": "b" * 64, "internal_test_files_accessed": False}
+            receipt = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 2,
+                "internal_test_files_accessed": False,
+                "model_sha256": "a" * 64, "config_sha256": tool.CONFIG_SHA256,
+                "git_commit": "c" * 40, "source_tree_sha256": "b" * 64,
+                "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
+                "batches_completed": 64, "optimizer_step_attempts": 4, "optimizer_updates": 1,
+                "amp_enabled": True, "cuda_device": "cuda:0",
+                "optimizer_state_present": True, "scaler_state_present": True,
+                "dataset_metadata_sha256": c["dataset_metadata_sha256"], "artifacts": {}}
+            for relative in ("weights/last.pt", "weights/best.pt", "results.csv"):
+                path = directory / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fixture")
+                receipt["artifacts"][relative] = tool.sha256_file(path)
+            records = {"run_manifest.json": manifest, "completion.json": receipt}
+            for filename, record in records.items():
+                write_json(directory / filename, record)
+            accepted = tool._smoke_receipt(root, c, identity, "b" * 64, "c" * 40)
+            self.assertIs(accepted["internal_test_files_accessed"], False)
+
+            missing = object()
+            for filename in records:
+                for value in (missing, True, 0, None, "false", 0.0, "", [], {}):
+                    with self.subTest(record=filename, value="missing" if value is missing else value):
+                        for name, record in records.items():
+                            candidate = dict(record)
+                            if name == filename:
+                                if value is missing:
+                                    candidate.pop("internal_test_files_accessed")
+                                else:
+                                    candidate["internal_test_files_accessed"] = value
+                            write_json(directory / name, candidate)
+                        with self.assertRaises(tool.Error):
+                            tool._smoke_receipt(root, c, identity, "b" * 64, "c" * 40)
 
     def test_smoke_receipt_rejects_new_commit_with_identical_scoped_source_hash(self):
         c = config()
@@ -699,12 +819,14 @@ class Experiment2PolicyTests(unittest.TestCase):
                 path.write_bytes(b"fixture")
                 artifacts[relative] = tool.sha256_file(path)
             write_json(directory / "completion.json", {
-                "mode": "smoke", "status": "COMPLETED", "epochs_completed": 1,
+                "mode": "smoke", "status": "COMPLETED", "epochs_completed": 2,
+                "internal_test_files_accessed": False,
                 "model_sha256": identity["sha256"], "config_sha256": tool.CONFIG_SHA256,
                 "git_commit": state_a["git_commit"],
                 "source_tree_sha256": state_a["source_tree_sha256"],
                 "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
-                "batches_completed": 32, "optimizer_updates": 2, "amp_enabled": True,
+                "batches_completed": 64, "optimizer_step_attempts": 4, "optimizer_updates": 1,
+                "amp_enabled": True,
                 "cuda_device": "cuda:0", "optimizer_state_present": True,
                 "scaler_state_present": True,
                 "dataset_metadata_sha256": c["dataset_metadata_sha256"],
@@ -713,6 +835,7 @@ class Experiment2PolicyTests(unittest.TestCase):
             write_json(directory / "run_manifest.json", {
                 "mode": "smoke", "git_commit": state_a["git_commit"],
                 "source_tree_sha256": state_a["source_tree_sha256"],
+                "internal_test_files_accessed": False,
             })
 
             outside.write_text("commit B", encoding="utf-8")
@@ -770,17 +893,21 @@ class Experiment2LaunchTests(unittest.TestCase):
                     (run / "weights").mkdir()
                     (run / "weights/last.pt").write_bytes(b"mock checkpoint")
                     (run / "weights/best.pt").write_bytes(b"mock best")
-                    (run / "results.csv").write_text("epoch,time,train/box_loss\n1,1.0,0.1\n")
+                    (run / "results.csv").write_text(
+                        "epoch,time,train/box_loss\n1,1.0,0.2\n2,2.0,0.1\n"
+                    )
                     tensor = torch.tensor(1., requires_grad=True)
                     trainer = SimpleNamespace(save_dir=run, start_epoch=0, args=SimpleNamespace(**args),
                         data=data, model=SimpleNamespace(model=[SimpleNamespace(nc=4, reg_max=1)], end2end=True),
-                        device="cuda:0", amp=True, optimizer=torch.optim.SGD([tensor], lr=.01),
-                        epoch=0, loss=torch.tensor(.1), ema=SimpleNamespace(updates=2), last=run / "weights/last.pt",
+                        device="cuda:0", amp=True,
+                        optimizer=torch.optim.SGD([tensor], lr=.01, momentum=.937),
+                        epoch=1, loss=torch.tensor(.1), ema=SimpleNamespace(updates=4), last=run / "weights/last.pt",
                         scaler=SimpleNamespace(state_dict=lambda: {"scale": 1.}),
                         stopper=SimpleNamespace(best_epoch=1, best_fitness=.1, patience=20))
-                    trainer.optimizer.state[tensor]["momentum_buffer"] = torch.tensor(.1)
                     callbacks["on_pretrain_routine_end"](trainer)
-                    for _ in range(32 if completed else 31):
+                    tensor.grad = torch.ones_like(tensor)
+                    trainer.optimizer.step()
+                    for _ in range(64 if completed else 63):
                         callbacks["on_train_batch_end"](trainer)
                     callbacks["on_model_save"](trainer)
                 model.train.side_effect = fake_train
@@ -801,14 +928,16 @@ class Experiment2LaunchTests(unittest.TestCase):
                     directory = tool.run_directory(root, c, "smoke")
                     self.assertEqual((directory / "completion.json").exists(), completed and readable)
                     self.assertEqual((directory / "failure.json").exists(), not (completed and readable))
-                    self.assertEqual(model.train.call_args.kwargs["epochs"], 1)
+                    self.assertEqual(model.train.call_args.kwargs["epochs"], 2)
                     manifest = json.loads((directory / "run_manifest.json").read_text(encoding="utf-8"))
                     self.assertEqual(manifest["git_commit"], "c" * 40)
                     self.assertEqual(manifest["source_tree_sha256"], "b" * 64)
+                    self.assertIs(manifest["internal_test_files_accessed"], False)
                     if completed and readable:
                         receipt = json.loads((directory / "completion.json").read_text(encoding="utf-8"))
                         self.assertEqual(receipt["git_commit"], manifest["git_commit"])
                         self.assertEqual(receipt["source_tree_sha256"], manifest["source_tree_sha256"])
+                        self.assertIs(receipt["internal_test_files_accessed"], False)
 
 
 if __name__ == "__main__":

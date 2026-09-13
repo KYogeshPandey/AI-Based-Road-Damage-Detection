@@ -32,7 +32,7 @@ from road_damage.training.source_state import (
 LOGGER = logging.getLogger(__name__)
 Error = shared.BaselineTrainingError
 CONFIG = Path("configs/training/experiment2_yolo26s_matched.yaml")
-CONFIG_SHA256 = "c299e47b9c04a95d3c5ddcd7215046d3a0d0118bbe05d382ac8e9211c3aadb01"
+CONFIG_SHA256 = "6de79b610cfce4938d9d06b9aabb078cb370fe49538aceb5ef2135183f33bf02"
 TOOLING = (str(CONFIG.as_posix()), "src/road_damage/training/experiment2.py",
            "tests/test_experiment2.py", "road-damage-project-docs/EXPERIMENT2_YOLO26S_RUNBOOK.md")
 ADDITIONAL_MATCHED = {
@@ -446,6 +446,59 @@ def _smoke_data(root: Path, config: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _smoke_workload(config: Mapping[str, Any]) -> tuple[int, int, int]:
+    epochs = config["smoke"]["overrides"]["epochs"]
+    train_images = config["smoke"]["split_counts"]["train"]
+    batch = config["training"]["batch"]
+    if any(type(value) is not int or value < 1 for value in (epochs, train_images, batch)):
+        raise Error("Smoke epochs, training-image count, and batch must be positive integers.")
+    batches_per_epoch = math.ceil(train_images / batch)
+    return epochs, batches_per_epoch, epochs * batches_per_epoch
+
+
+def _register_successful_optimizer_step_counter(
+    optimizer: Any, progress: dict[str, Any]
+) -> Any:
+    """Count only completed calls to this optimizer instance's underlying step()."""
+    def after_step(_optimizer: Any, _args: tuple[Any, ...], _kwargs: dict[str, Any]) -> None:
+        progress["optimizer_updates"] += 1
+
+    return optimizer.register_step_post_hook(after_step)
+
+
+def _validate_training_evidence(
+    rows: Sequence[Mapping[str, str]],
+    progress: Mapping[str, Any],
+    mode: str,
+    config: Mapping[str, Any],
+) -> None:
+    optimizer_step_attempts = progress.get("optimizer_step_attempts")
+    optimizer_updates = progress.get("optimizer_updates")
+    try:
+        finite_results = all(math.isfinite(float(value)) for row in rows for value in row.values())
+    except (TypeError, ValueError) as exc:
+        raise Error("Training results contain a non-numeric value.") from exc
+    if (not rows or len(rows) != progress.get("epochs_completed")
+            or [int(row["epoch"]) for row in rows] != list(range(1, len(rows) + 1))
+            or not finite_results
+            or type(optimizer_step_attempts) is not int
+            or type(optimizer_updates) is not int
+            or optimizer_updates < 1
+            or optimizer_step_attempts < optimizer_updates
+            or progress.get("optimizer_state_present") is not True
+            or progress.get("scaler_state_present") is not True):
+        raise Error("Training returned without complete finite epoch/optimizer evidence.")
+    if mode == "smoke":
+        expected_epochs, _batches_per_epoch, expected_batches = _smoke_workload(config)
+        if (len(rows) != expected_epochs
+                or progress.get("epochs_completed") != expected_epochs
+                or progress.get("batches_completed") != expected_batches):
+            raise Error(
+                f"Smoke must complete exactly {expected_epochs} epochs / "
+                f"{expected_batches} training batches."
+            )
+
+
 def _smoke_receipt(
     root: Path,
     config: Mapping[str, Any],
@@ -454,26 +507,35 @@ def _smoke_receipt(
     git_commit: str,
 ) -> dict[str, Any]:
     directory = run_directory(root, config, "smoke")
+    smoke_epochs, _batches_per_epoch, smoke_batches = _smoke_workload(config)
     manifest = _read(directory / "run_manifest.json")
     receipt = _read(directory / "completion.json")
     receipt_commit = receipt.get("git_commit")
+    optimizer_step_attempts = receipt.get("optimizer_step_attempts")
+    optimizer_updates = receipt.get("optimizer_updates")
     if (not isinstance(git_commit, str)
             or re.fullmatch(r"[0-9a-f]{40}", git_commit) is None
             or not isinstance(receipt_commit, str)
             or re.fullmatch(r"[0-9a-f]{40}", receipt_commit) is None
             or receipt_commit != git_commit
             or manifest.get("mode") != "smoke"
+            or manifest.get("internal_test_files_accessed") is not False
             or manifest.get("git_commit") != receipt_commit
             or manifest.get("source_tree_sha256") != receipt.get("source_tree_sha256")
             or receipt.get("mode") != "smoke" or receipt.get("status") != "COMPLETED"
-            or receipt.get("epochs_completed") != 1 or receipt.get("model_sha256") != identity["sha256"]
+            or receipt.get("internal_test_files_accessed") is not False
+            or receipt.get("epochs_completed") != smoke_epochs
+            or receipt.get("model_sha256") != identity["sha256"]
             or receipt.get("config_sha256") != CONFIG_SHA256 or receipt.get("source_tree_sha256") != source_sha
             or receipt.get("smoke_manifest_sha256") != config["smoke"]["manifest_sha256"]
-            or receipt.get("batches_completed", 0) != 32 or receipt.get("optimizer_updates", 0) < 1
+            or receipt.get("batches_completed") != smoke_batches
+            or type(optimizer_step_attempts) is not int
+            or type(optimizer_updates) is not int
+            or optimizer_updates < 1 or optimizer_step_attempts < optimizer_updates
             or receipt.get("amp_enabled") is not True or receipt.get("cuda_device") != "cuda:0"
             or receipt.get("optimizer_state_present") is not True or receipt.get("scaler_state_present") is not True
             or receipt.get("dataset_metadata_sha256") != config["dataset_metadata_sha256"]):
-        raise Error("A completed, identical one-epoch smoke run is required before full training.")
+        raise Error("A completed, identical two-epoch smoke run is required before full training.")
     if set(receipt.get("artifacts", {})) != {"weights/last.pt", "weights/best.pt", "results.csv"}:
         raise Error("Smoke completion checkpoint evidence is incomplete.")
     for relative, digest in receipt["artifacts"].items():
@@ -517,7 +579,8 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
         "git_commit": git_commit, "source_tree_sha256": source_sha,
         "internal_test_files_accessed": False}
     write_json_atomic(directory / "run_manifest.json", provenance)
-    progress: dict[str, Any] = {"batches_completed": 0, "epochs_completed": 0}
+    progress: dict[str, Any] = {"batches_completed": 0, "epochs_completed": 0,
+                                "optimizer_step_attempts": 0, "optimizer_updates": 0}
     try:
         import torch
         from ultralytics import YOLO
@@ -525,8 +588,10 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
         with offline_framework(root, config, mode):
             model = YOLO(str(_path(root, config["model"]["path"])), task="detect")
             verify_checkpoint_architecture(model.model, architecture(config))
+            optimizer_step_handle: Any | None = None
 
             def before_training(trainer: Any) -> None:
+                nonlocal optimizer_step_handle
                 if Path(trainer.save_dir).resolve() != directory or trainer.start_epoch != 0:
                     raise Error("Trainer run identity/start epoch changed.")
                 for key, value in args.items():
@@ -545,15 +610,21 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
                 for split in ("train", "val"):
                     if Path(trainer.data[split]).resolve() != Path(data[split]):
                         raise Error("Runtime dataset path changed.")
+                if optimizer_step_handle is not None:
+                    raise Error("Optimizer successful-step counter was already registered.")
+                optimizer_step_handle = _register_successful_optimizer_step_counter(
+                    trainer.optimizer, progress
+                )
 
             def after_batch(trainer: Any) -> None:
                 if not bool(torch.isfinite(trainer.loss).all()):
                     raise Error("Non-finite training loss; do not continue as a successful smoke run.")
                 progress["batches_completed"] += 1
+                progress["optimizer_step_attempts"] = int(trainer.ema.updates)
 
             def after_save(trainer: Any) -> None:
                 progress.update(epochs_completed=int(trainer.epoch) + 1,
-                    optimizer_updates=int(trainer.ema.updates), amp_enabled=bool(trainer.amp),
+                    optimizer_step_attempts=int(trainer.ema.updates), amp_enabled=bool(trainer.amp),
                     cuda_device=str(trainer.device),
                     optimizer_state_present=bool(trainer.optimizer.state_dict()["state"]),
                     scaler_state_present=bool(trainer.scaler.state_dict()))
@@ -561,6 +632,8 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
                     "completed_epoch": int(trainer.epoch) + 1, "best_epoch": trainer.stopper.best_epoch,
                     "best_fitness": trainer.stopper.best_fitness, "patience": trainer.stopper.patience,
                     "last_sha256": sha256_file(Path(trainer.last)), "config_sha256": CONFIG_SHA256,
+                    "optimizer_step_attempts": progress["optimizer_step_attempts"],
+                    "optimizer_updates": progress["optimizer_updates"],
                     "optimizer_state_present": bool(trainer.optimizer.state_dict()["state"]),
                     "scaler_state_present": bool(trainer.scaler.state_dict())}
                 write_json_atomic(directory / "epoch_state.json", state)
@@ -570,18 +643,14 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
             model.add_callback("on_model_save", after_save)
             call_args = dict(args)
             call_args.pop("model")
-            model.train(**call_args)
+            try:
+                model.train(**call_args)
+            finally:
+                if optimizer_step_handle is not None:
+                    optimizer_step_handle.remove()
         with (directory / "results.csv").open(newline="", encoding="utf-8") as stream:
             rows = list(csv.DictReader(stream))
-        if (not rows or len(rows) != progress["epochs_completed"]
-                or [int(r["epoch"]) for r in rows] != list(range(1, len(rows) + 1))
-                or any(not math.isfinite(float(v)) for row in rows for v in row.values())
-                or progress.get("optimizer_updates", 0) < 1
-                or progress.get("optimizer_state_present") is not True
-                or progress.get("scaler_state_present") is not True):
-            raise Error("Training returned without complete finite epoch/optimizer evidence.")
-        if mode == "smoke" and (len(rows) != 1 or progress["batches_completed"] != 32):
-            raise Error("Smoke must complete exactly one epoch / 32 training batches.")
+        _validate_training_evidence(rows, progress, mode, config)
         artifacts = {relative: sha256_file(directory / relative)
                      for relative in ("weights/last.pt", "weights/best.pt", "results.csv")
                      if (directory / relative).stat().st_size > 0}
@@ -591,6 +660,7 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
             for name in ("best.pt", "last.pt"):
                 _verify_completed_checkpoint(directory / "weights" / name, config)
         receipt = {"status": "COMPLETED", "mode": mode, **progress,
+            "internal_test_files_accessed": provenance["internal_test_files_accessed"],
             "model_sha256": identity["sha256"], "config_sha256": CONFIG_SHA256,
             "git_commit": git_commit, "source_tree_sha256": source_sha,
             "smoke_manifest_sha256": config["smoke"]["manifest_sha256"],

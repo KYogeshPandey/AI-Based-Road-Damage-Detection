@@ -1,8 +1,8 @@
 # Experiment 2: matched pretrained YOLO26s
 
-Status: preparation tooling only. No weights have been acquired by this change,
-and neither the smoke test nor full training has been run. This implements the
-PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN detector experiment.
+Status: preparation tooling with three preserved failed smoke attempts. No smoke
+completion has been approved, and full training has not been run. This implements
+the PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN detector experiment.
 The preceding reviewed project commit is
 `95df7f1e85c8101b2fd9b1f0a4538a431234f557`.
 
@@ -190,19 +190,27 @@ The pinned manifest and YAML are checked, then the existing independent smoke
 validator rechecks byte identity, train-to-train / val-to-val lineage, class
 mapping, countries, counts, positives/negatives and exclusions.
 
-The smoke run is exactly **one epoch**, 128 train images (80 positive / 48
+The smoke run is exactly **two epochs**, 128 train images (80 positive / 48
 negative), 64 validation images (40 positive / 24 negative), batch 4, 640 pixels,
 device 0, seed 42, AMP, SGD. The training `fraction` is type-pinned to float
 `1.0`, meaning the complete 128-image training split; Ultralytics interprets
 integer `1` as a one-image count, so that representation is explicitly rejected.
-Validation remains the complete 64-image split. Overrides are restricted to one epoch,
+Validation remains the complete 64-image split. Overrides are restricted to two epochs,
 `close_mosaic=0`, `save_period=1`, `plots=false`. It cannot accept an epoch,
-model, dataset, output, resume, or force override. It runs 32 training batches.
+model, dataset, output, resume, or force override. It runs exactly 32 batches per
+epoch and 64 training batches in total. Full training remains 100 epochs with
+the unchanged matched scientific settings.
 
 This is a technical test of loading, CUDA, forward/backward optimization,
 four-class mapping, memory feasibility and checkpoint writing. Its losses or
-validation metrics are not an accuracy experiment. The run records finite-loss
-batch completion, optimizer updates, native AMP/CUDA state, epoch state,
+validation metrics are not an accuracy experiment. `optimizer_step_attempts`
+records accumulated optimizer/AMP attempts observed through Ultralytics' EMA
+update counter; `optimizer_updates` counts only successful underlying SGD
+`step()` calls through a scoped PyTorch optimizer post-hook. Successful smoke
+completion requires at least one such SGD update plus non-empty momentum-SGD
+state. An attempted step skipped naturally by AMP is diagnostic evidence, not a
+successful update, and the smoke fails if every attempt is skipped. The run also
+records finite-loss batch completion, native AMP/CUDA/scaler state, epoch state,
 checkpoint hashes, and peak allocated/reserved CUDA memory. A failed/OOM or
 partial run cannot publish `completion.json`. Do not reduce batch/resolution,
 switch to nano, or disable AMP silently; those changes would need a separately
@@ -220,7 +228,7 @@ the specific cause in a reviewed correction before retrying.
 ```
 
 This fresh-run command repeats preflight and train/val byte checks, and requires
-a completed one-epoch smoke receipt with identical model/config/source/dataset
+a completed two-epoch smoke receipt with identical model/config/source/dataset
 identity and unchanged persisted checkpoint/results hashes. The smoke
 `completion.json` is bound to both the exact verified clean Git `HEAD` commit and
 the committed-tree source hash. Full training rejects the receipt when either
@@ -234,7 +242,11 @@ then uses:
 The run snapshots an absolute train/val-only YAML, resolved arguments, source
 state, Git commit, environment, pretrained identity, metadata fingerprints and
 smoke validation. `run_manifest.json` and `completion.json` record the same
-verified `git_commit` and `source_tree_sha256` values. Existing run directories
+verified `git_commit` and `source_tree_sha256` values. Successful completion
+copies `internal_test_files_accessed: false` from the run manifest state. Smoke
+receipt validation requires this explicit JSON boolean `false` independently in
+both records; a missing field, `true`, or a non-boolean value fails the gate.
+Existing run directories
 are refused. Source labels/images are not copied or edited. Ultralytics dataset
 cache disk writes are suppressed, while required in-memory cache metadata such
 as the dataset cache version is preserved so a cache rescan remains valid.

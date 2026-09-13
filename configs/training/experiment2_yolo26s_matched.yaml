@@ -126,7 +126,7 @@
       "val": 64
     },
     "overrides": {
-      "epochs": 1,
+      "epochs": 2,
       "close_mosaic": 0,
       "save_period": 1,
       "plots": false
