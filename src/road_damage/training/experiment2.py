@@ -32,7 +32,7 @@ from road_damage.training.source_state import (
 LOGGER = logging.getLogger(__name__)
 Error = shared.BaselineTrainingError
 CONFIG = Path("configs/training/experiment2_yolo26s_matched.yaml")
-CONFIG_SHA256 = "2fbde75227a81ff5098b5313d99a00713322732061e15eeb554ea8463407e7fd"
+CONFIG_SHA256 = "c299e47b9c04a95d3c5ddcd7215046d3a0d0118bbe05d382ac8e9211c3aadb01"
 TOOLING = (str(CONFIG.as_posix()), "src/road_damage/training/experiment2.py",
            "tests/test_experiment2.py", "road-damage-project-docs/EXPERIMENT2_YOLO26S_RUNBOOK.md")
 ADDITIONAL_MATCHED = {
@@ -67,6 +67,10 @@ def load_config(root: Path = PROJECT_ROOT) -> dict[str, Any]:
     path = _path(root, CONFIG)
     shared.verify_file_sha256(path, CONFIG_SHA256, "Experiment 2 configuration")
     config = _read(path)
+    training = config.get("training")
+    fraction = training.get("fraction") if isinstance(training, Mapping) else None
+    if type(fraction) is not float or fraction != 1.0:
+        raise Error("Experiment 2 training fraction must be exactly the float 1.0.")
     baseline_path = _path(root, config["baseline_config"])
     shared.verify_file_sha256(baseline_path, config["baseline_config_sha256"], "baseline config")
     baseline = shared.load_baseline_config(baseline_path, root)

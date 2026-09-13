@@ -70,7 +70,7 @@
     "warmup_epochs": 3,
     "seed": 42,
     "deterministic": true,
-    "fraction": 1,
+    "fraction": 1.0,
     "rect": false,
     "multi_scale": 0,
     "hsv_h": 0.015,

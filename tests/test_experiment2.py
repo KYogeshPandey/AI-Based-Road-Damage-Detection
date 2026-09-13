@@ -89,6 +89,25 @@ class Experiment2PolicyTests(unittest.TestCase):
         self.assertEqual(c["class_names"], {"0": "D00_longitudinal_crack", "1": "D10_transverse_crack",
             "2": "D20_alligator_crack", "3": "D40_pothole"})
 
+    def test_fraction_is_exact_float_and_type_drift_is_rejected(self):
+        expected_sha256 = "c299e47b9c04a95d3c5ddcd7215046d3a0d0118bbe05d382ac8e9211c3aadb01"
+        c = config()
+        self.assertEqual(tool.sha256_file(ROOT / tool.CONFIG), expected_sha256)
+        self.assertEqual(tool.CONFIG_SHA256, expected_sha256)
+        self.assertIs(type(c["training"]["fraction"]), float)
+        self.assertEqual(c["training"]["fraction"], 1.0)
+
+        for invalid in (1, True, "1.0"):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                altered = copy.deepcopy(c)
+                altered["training"]["fraction"] = invalid
+                config_path = root / tool.CONFIG
+                write_json(config_path, altered)
+                with patch.object(tool, "CONFIG_SHA256", tool.sha256_file(config_path)):
+                    with self.assertRaisesRegex(tool.Error, "exactly the float 1.0"):
+                        tool.load_config(root)
+
     def test_recorded_baseline_loss_gains_are_literal_and_drift_is_rejected(self):
         import yaml
 
@@ -271,6 +290,69 @@ class Experiment2PolicyTests(unittest.TestCase):
         for record in observed:
             self.assertEqual(record["version"], DATASET_CACHE_VERSION)
             self.assertEqual(record["keys"], {"labels", "hash", "results", "msgs", "version"})
+
+    def test_ultralytics_fraction_type_controls_train_count_but_not_validation(self):
+        import cv2
+        import numpy as np
+        from ultralytics.cfg import get_cfg
+        from ultralytics.data.build import build_yolo_dataset
+
+        c = config()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            split_counts = {"train": 5, "val": 3}
+            for split, count in split_counts.items():
+                image_dir = root / "dataset" / "images" / split
+                label_dir = root / "dataset" / "labels" / split
+                image_dir.mkdir(parents=True)
+                label_dir.mkdir(parents=True)
+                for index in range(count):
+                    image_path = image_dir / f"sample_{index:02d}.jpg"
+                    self.assertTrue(cv2.imwrite(
+                        str(image_path), np.full((32, 32, 3), 96 + index, dtype=np.uint8)
+                    ))
+                    (label_dir / f"sample_{index:02d}.txt").write_text(
+                        "0 0.5 0.5 0.25 0.25\n", encoding="utf-8"
+                    )
+
+            data = {"names": dict(tool.shared.CLASS_NAMES)}
+
+            def build(fraction, split):
+                cfg = get_cfg()
+                cfg.task = "detect"
+                cfg.imgsz = 32
+                cfg.cache = False
+                cfg.rect = False
+                cfg.single_cls = False
+                cfg.classes = None
+                cfg.fraction = fraction
+                return build_yolo_dataset(
+                    cfg,
+                    str(root / "dataset" / "images" / split),
+                    batch=4,
+                    data=data,
+                    mode=split,
+                    stride=32,
+                )
+
+            original_callback = tool._preserve_dataset_cache_metadata_without_write
+            with patch.object(
+                tool,
+                "_preserve_dataset_cache_metadata_without_write",
+                wraps=original_callback,
+            ) as cache_callback, tool.offline_framework(root, c):
+                float_train = build(1.0, "train")
+                float_val = build(1.0, "val")
+                integer_train = build(1, "train")
+                integer_val = build(1, "val")
+
+            self.assertEqual(len(float_train), split_counts["train"])
+            self.assertEqual(len(float_val), split_counts["val"])
+            self.assertEqual(len(integer_train), 1)
+            self.assertEqual(len(integer_val), split_counts["val"])
+            self.assertEqual(cache_callback.call_count, 4)
+            for split in split_counts:
+                self.assertFalse((root / "dataset" / "labels" / f"{split}.cache").exists())
 
     def test_acquisition_requires_publisher_sha_before_download_or_checkpoint_loading(self):
         c = config()

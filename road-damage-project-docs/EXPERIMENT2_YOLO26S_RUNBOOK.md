@@ -192,7 +192,10 @@ mapping, countries, counts, positives/negatives and exclusions.
 
 The smoke run is exactly **one epoch**, 128 train images (80 positive / 48
 negative), 64 validation images (40 positive / 24 negative), batch 4, 640 pixels,
-device 0, seed 42, AMP, SGD. Overrides are restricted to one epoch,
+device 0, seed 42, AMP, SGD. The training `fraction` is type-pinned to float
+`1.0`, meaning the complete 128-image training split; Ultralytics interprets
+integer `1` as a one-image count, so that representation is explicitly rejected.
+Validation remains the complete 64-image split. Overrides are restricted to one epoch,
 `close_mosaic=0`, `save_period=1`, `plots=false`. It cannot accept an epoch,
 model, dataset, output, resume, or force override. It runs 32 training batches.
 
