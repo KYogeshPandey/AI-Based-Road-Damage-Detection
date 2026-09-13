@@ -90,7 +90,7 @@ class Experiment2PolicyTests(unittest.TestCase):
             "2": "D20_alligator_crack", "3": "D40_pothole"})
 
     def test_fraction_is_exact_float_and_type_drift_is_rejected(self):
-        expected_sha256 = "6de79b610cfce4938d9d06b9aabb078cb370fe49538aceb5ef2135183f33bf02"
+        expected_sha256 = "0ae18ab9fa2d1098eefed24b2b75f5ed6f94b9e2bce773396d6402339cdaafe9"
         c = config()
         self.assertEqual(tool.sha256_file(ROOT / tool.CONFIG), expected_sha256)
         self.assertEqual(tool.CONFIG_SHA256, expected_sha256)
@@ -362,7 +362,8 @@ class Experiment2PolicyTests(unittest.TestCase):
         scaler = torch.amp.GradScaler("cpu", init_scale=65536.0)
         progress = {"optimizer_step_attempts": 0, "optimizer_updates": 0}
         handle = tool._register_successful_optimizer_step_counter(optimizer, progress)
-        rows = [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "0.1"}]
+        rows = [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "0.1"},
+                {"epoch": "3", "loss": "0.05"}]
         try:
             for _ in range(2):
                 optimizer.zero_grad(set_to_none=True)
@@ -374,7 +375,7 @@ class Experiment2PolicyTests(unittest.TestCase):
 
             self.assertEqual(progress, {"optimizer_step_attempts": 2, "optimizer_updates": 0})
             self.assertFalse(optimizer.state)
-            skipped_evidence = {**progress, "epochs_completed": 2, "batches_completed": 64,
+            skipped_evidence = {**progress, "epochs_completed": 3, "batches_completed": 96,
                 "optimizer_state_present": False, "scaler_state_present": bool(scaler.state_dict())}
             with self.assertRaises(tool.Error):
                 tool._validate_training_evidence(rows, skipped_evidence, "smoke", config())
@@ -387,7 +388,7 @@ class Experiment2PolicyTests(unittest.TestCase):
             self.assertEqual(progress["optimizer_updates"], 1)
             self.assertTrue(optimizer.state)
             self.assertIn("momentum_buffer", optimizer.state[parameter])
-            successful_evidence = {**progress, "epochs_completed": 2, "batches_completed": 64,
+            successful_evidence = {**progress, "epochs_completed": 3, "batches_completed": 96,
                 "optimizer_state_present": True, "scaler_state_present": bool(scaler.state_dict())}
             tool._validate_training_evidence(rows, successful_evidence, "smoke", config())
         finally:
@@ -399,31 +400,35 @@ class Experiment2PolicyTests(unittest.TestCase):
         optimizer.step()
         self.assertEqual(progress["optimizer_updates"], counted_updates)
 
-    def test_smoke_training_evidence_requires_exact_two_epoch_workload(self):
+    def test_smoke_training_evidence_requires_exact_three_epoch_workload(self):
         c = config()
-        rows = [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "0.1"}]
-        valid = {"epochs_completed": 2, "batches_completed": 64,
-            "optimizer_step_attempts": 4, "optimizer_updates": 1,
+        rows = [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "0.1"},
+                {"epoch": "3", "loss": "0.05"}]
+        valid = {"epochs_completed": 3, "batches_completed": 96,
+            "optimizer_step_attempts": 14, "optimizer_updates": 1,
             "optimizer_state_present": True, "scaler_state_present": True}
+        self.assertEqual(c["smoke"]["overrides"]["epochs"], 3)
         self.assertEqual(c["smoke"]["split_counts"], {"train": 128, "val": 64})
         self.assertEqual(c["training"]["batch"], 4)
-        self.assertEqual(tool._smoke_workload(c), (2, 32, 64))
+        self.assertEqual(tool._smoke_workload(c), (3, 32, 96))
         tool._validate_training_evidence(rows, valid, "smoke", c)
         for case_rows, changes in (
             (rows[:1], {"epochs_completed": 1, "batches_completed": 32}),
-            (rows, {"batches_completed": 63}),
-            (rows, {"optimizer_step_attempts": 4, "optimizer_updates": 0}),
+            (rows[:2], {"epochs_completed": 2, "batches_completed": 64}),
+            (rows, {"batches_completed": 95}),
+            (rows, {"batches_completed": 97}),
+            (rows, {"optimizer_updates": 0}),
+            (rows, {"optimizer_step_attempts": 0}),
             (rows, {"optimizer_state_present": False}),
+            (rows, {"scaler_state_present": False}),
         ):
             with self.subTest(changes=changes), self.assertRaises(tool.Error):
                 tool._validate_training_evidence(case_rows, {**valid, **changes}, "smoke", c)
-        with self.assertRaises(tool.Error):
-            tool._validate_training_evidence(
-                [{"epoch": "1", "loss": "0.2"}, {"epoch": "2", "loss": "nan"}],
-                valid,
-                "smoke",
-                c,
-            )
+        for value in ("nan", "inf", "-inf"):
+            with self.subTest(loss=value), self.assertRaises(tool.Error):
+                tool._validate_training_evidence(
+                    [*rows[:2], {"epoch": "3", "loss": value}], valid, "smoke", c
+                )
 
     def test_acquisition_requires_publisher_sha_before_download_or_checkpoint_loading(self):
         c = config()
@@ -658,10 +663,10 @@ class Experiment2PolicyTests(unittest.TestCase):
             root = Path(temp)
             smoke = tool.training_arguments(root, c, "smoke", root / "snapshot.yaml")
             train = tool.training_arguments(root, c, "train", root / "snapshot.yaml")
-            self.assertEqual(smoke["epochs"], 2)
+            self.assertEqual(smoke["epochs"], 3)
             self.assertEqual(train["epochs"], 100)
             self.assertEqual(c["smoke"]["split_counts"], {"train": 128, "val": 64})
-            self.assertEqual(tool._smoke_workload(c), (2, 32, 64))
+            self.assertEqual(tool._smoke_workload(c), (3, 32, 96))
             for args in (smoke, train):
                 self.assertEqual((args["batch"], args["imgsz"], args["seed"], args["optimizer"]), (4, 640, 42, "SGD"))
                 self.assertFalse(args["resume"])
@@ -681,12 +686,12 @@ class Experiment2PolicyTests(unittest.TestCase):
             directory = tool.run_directory(root, c, "smoke")
             identity = {"sha256": "a" * 64}
             git_commit = "c" * 40
-            valid = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 2,
+            valid = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 3,
                 "internal_test_files_accessed": False,
                 "model_sha256": identity["sha256"], "config_sha256": tool.CONFIG_SHA256,
                 "git_commit": git_commit, "source_tree_sha256": "b" * 64,
                 "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
-                "batches_completed": 64, "optimizer_step_attempts": 4, "optimizer_updates": 1,
+                "batches_completed": 96, "optimizer_step_attempts": 14, "optimizer_updates": 1,
                 "amp_enabled": True, "cuda_device": "cuda:0",
                 "optimizer_state_present": True, "scaler_state_present": True,
                 "dataset_metadata_sha256": c["dataset_metadata_sha256"], "artifacts": {}}
@@ -707,10 +712,18 @@ class Experiment2PolicyTests(unittest.TestCase):
             write_json(directory / "completion.json", missing_commit)
             with self.assertRaises(tool.Error):
                 tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
+            write_json(directory / "completion.json", {
+                **valid, "epochs_completed": 2, "batches_completed": 64,
+            })
+            with self.assertRaises(tool.Error):
+                tool._smoke_receipt(root, c, identity, "b" * 64, git_commit)
             for key, value in (("status", "STARTED"), ("status", "FAILED_TECHNICAL"), ("epochs_completed", 1),
-                               ("batches_completed", 32), ("batches_completed", 63),
+                               ("epochs_completed", 2), ("batches_completed", 32),
+                               ("batches_completed", 64), ("batches_completed", 95), ("batches_completed", 97),
                                ("optimizer_step_attempts", 0), ("optimizer_updates", 0),
                                ("model_sha256", "f" * 64),
+                               ("config_sha256", "f" * 64), ("smoke_manifest_sha256", "f" * 64),
+                               ("dataset_metadata_sha256", {}),
                                ("git_commit", "not-a-git-commit"), ("git_commit", "d" * 40),
                                ("source_tree_sha256", "f" * 64), ("artifacts", {}), ("amp_enabled", False),
                                ("optimizer_state_present", False), ("scaler_state_present", False)):
@@ -737,12 +750,12 @@ class Experiment2PolicyTests(unittest.TestCase):
             identity = {"sha256": "a" * 64}
             manifest = {"mode": "smoke", "git_commit": "c" * 40,
                 "source_tree_sha256": "b" * 64, "internal_test_files_accessed": False}
-            receipt = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 2,
+            receipt = {"mode": "smoke", "status": "COMPLETED", "epochs_completed": 3,
                 "internal_test_files_accessed": False,
                 "model_sha256": "a" * 64, "config_sha256": tool.CONFIG_SHA256,
                 "git_commit": "c" * 40, "source_tree_sha256": "b" * 64,
                 "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
-                "batches_completed": 64, "optimizer_step_attempts": 4, "optimizer_updates": 1,
+                "batches_completed": 96, "optimizer_step_attempts": 14, "optimizer_updates": 1,
                 "amp_enabled": True, "cuda_device": "cuda:0",
                 "optimizer_state_present": True, "scaler_state_present": True,
                 "dataset_metadata_sha256": c["dataset_metadata_sha256"], "artifacts": {}}
@@ -819,13 +832,13 @@ class Experiment2PolicyTests(unittest.TestCase):
                 path.write_bytes(b"fixture")
                 artifacts[relative] = tool.sha256_file(path)
             write_json(directory / "completion.json", {
-                "mode": "smoke", "status": "COMPLETED", "epochs_completed": 2,
+                "mode": "smoke", "status": "COMPLETED", "epochs_completed": 3,
                 "internal_test_files_accessed": False,
                 "model_sha256": identity["sha256"], "config_sha256": tool.CONFIG_SHA256,
                 "git_commit": state_a["git_commit"],
                 "source_tree_sha256": state_a["source_tree_sha256"],
                 "smoke_manifest_sha256": c["smoke"]["manifest_sha256"],
-                "batches_completed": 64, "optimizer_step_attempts": 4, "optimizer_updates": 1,
+                "batches_completed": 96, "optimizer_step_attempts": 14, "optimizer_updates": 1,
                 "amp_enabled": True,
                 "cuda_device": "cuda:0", "optimizer_state_present": True,
                 "scaler_state_present": True,
@@ -894,20 +907,20 @@ class Experiment2LaunchTests(unittest.TestCase):
                     (run / "weights/last.pt").write_bytes(b"mock checkpoint")
                     (run / "weights/best.pt").write_bytes(b"mock best")
                     (run / "results.csv").write_text(
-                        "epoch,time,train/box_loss\n1,1.0,0.2\n2,2.0,0.1\n"
+                        "epoch,time,train/box_loss\n1,1.0,0.2\n2,2.0,0.1\n3,3.0,0.05\n"
                     )
                     tensor = torch.tensor(1., requires_grad=True)
                     trainer = SimpleNamespace(save_dir=run, start_epoch=0, args=SimpleNamespace(**args),
                         data=data, model=SimpleNamespace(model=[SimpleNamespace(nc=4, reg_max=1)], end2end=True),
                         device="cuda:0", amp=True,
                         optimizer=torch.optim.SGD([tensor], lr=.01, momentum=.937),
-                        epoch=1, loss=torch.tensor(.1), ema=SimpleNamespace(updates=4), last=run / "weights/last.pt",
+                        epoch=2, loss=torch.tensor(.1), ema=SimpleNamespace(updates=14), last=run / "weights/last.pt",
                         scaler=SimpleNamespace(state_dict=lambda: {"scale": 1.}),
                         stopper=SimpleNamespace(best_epoch=1, best_fitness=.1, patience=20))
                     callbacks["on_pretrain_routine_end"](trainer)
                     tensor.grad = torch.ones_like(tensor)
                     trainer.optimizer.step()
-                    for _ in range(64 if completed else 63):
+                    for _ in range(96 if completed else 95):
                         callbacks["on_train_batch_end"](trainer)
                     callbacks["on_model_save"](trainer)
                 model.train.side_effect = fake_train
@@ -928,13 +941,15 @@ class Experiment2LaunchTests(unittest.TestCase):
                     directory = tool.run_directory(root, c, "smoke")
                     self.assertEqual((directory / "completion.json").exists(), completed and readable)
                     self.assertEqual((directory / "failure.json").exists(), not (completed and readable))
-                    self.assertEqual(model.train.call_args.kwargs["epochs"], 2)
+                    self.assertEqual(model.train.call_args.kwargs["epochs"], 3)
                     manifest = json.loads((directory / "run_manifest.json").read_text(encoding="utf-8"))
                     self.assertEqual(manifest["git_commit"], "c" * 40)
                     self.assertEqual(manifest["source_tree_sha256"], "b" * 64)
                     self.assertIs(manifest["internal_test_files_accessed"], False)
                     if completed and readable:
                         receipt = json.loads((directory / "completion.json").read_text(encoding="utf-8"))
+                        self.assertEqual(receipt["epochs_completed"], 3)
+                        self.assertEqual(receipt["batches_completed"], 96)
                         self.assertEqual(receipt["git_commit"], manifest["git_commit"])
                         self.assertEqual(receipt["source_tree_sha256"], manifest["source_tree_sha256"])
                         self.assertIs(receipt["internal_test_files_accessed"], False)

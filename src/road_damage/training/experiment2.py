@@ -32,7 +32,7 @@ from road_damage.training.source_state import (
 LOGGER = logging.getLogger(__name__)
 Error = shared.BaselineTrainingError
 CONFIG = Path("configs/training/experiment2_yolo26s_matched.yaml")
-CONFIG_SHA256 = "6de79b610cfce4938d9d06b9aabb078cb370fe49538aceb5ef2135183f33bf02"
+CONFIG_SHA256 = "0ae18ab9fa2d1098eefed24b2b75f5ed6f94b9e2bce773396d6402339cdaafe9"
 TOOLING = (str(CONFIG.as_posix()), "src/road_damage/training/experiment2.py",
            "tests/test_experiment2.py", "road-damage-project-docs/EXPERIMENT2_YOLO26S_RUNBOOK.md")
 ADDITIONAL_MATCHED = {
@@ -535,7 +535,7 @@ def _smoke_receipt(
             or receipt.get("amp_enabled") is not True or receipt.get("cuda_device") != "cuda:0"
             or receipt.get("optimizer_state_present") is not True or receipt.get("scaler_state_present") is not True
             or receipt.get("dataset_metadata_sha256") != config["dataset_metadata_sha256"]):
-        raise Error("A completed, identical two-epoch smoke run is required before full training.")
+        raise Error("A completed, identical three-epoch smoke run is required before full training.")
     if set(receipt.get("artifacts", {})) != {"weights/last.pt", "weights/best.pt", "results.csv"}:
         raise Error("Smoke completion checkpoint evidence is incomplete.")
     for relative, digest in receipt["artifacts"].items():

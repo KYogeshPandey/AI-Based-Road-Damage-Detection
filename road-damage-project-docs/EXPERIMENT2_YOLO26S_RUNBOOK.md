@@ -1,6 +1,6 @@
 # Experiment 2: matched pretrained YOLO26s
 
-Status: preparation tooling with three preserved failed smoke attempts. No smoke
+Status: preparation tooling with four preserved failed smoke attempts. No smoke
 completion has been approved, and full training has not been run. This implements
 the PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN detector experiment.
 The preceding reviewed project commit is
@@ -178,7 +178,7 @@ only train/val records in the pinned export manifest. Internal-test records
 are skipped before their paths are resolved. Dataset YAML has exactly `train`,
 `val`, and `names`. There is no user-supplied dataset or model override.
 
-## Smoke test — USER command, prepared but not run
+## Smoke test — USER command, three-epoch protocol prepared but not run
 
 ```powershell
 .\.venv\Scripts\python.exe src\road_damage\training\experiment2.py --smoke
@@ -190,16 +190,30 @@ The pinned manifest and YAML are checked, then the existing independent smoke
 validator rechecks byte identity, train-to-train / val-to-val lineage, class
 mapping, countries, counts, positives/negatives and exclusions.
 
-The smoke run is exactly **two epochs**, 128 train images (80 positive / 48
+The smoke run is exactly **three epochs**, 128 train images (80 positive / 48
 negative), 64 validation images (40 positive / 24 negative), batch 4, 640 pixels,
 device 0, seed 42, AMP, SGD. The training `fraction` is type-pinned to float
 `1.0`, meaning the complete 128-image training split; Ultralytics interprets
 integer `1` as a one-image count, so that representation is explicitly rejected.
-Validation remains the complete 64-image split. Overrides are restricted to two epochs,
+Validation remains the complete 64-image split. Overrides are restricted to three epochs,
 `close_mosaic=0`, `save_period=1`, `plots=false`. It cannot accept an epoch,
 model, dataset, output, resume, or force override. It runs exactly 32 batches per
-epoch and 64 training batches in total. Full training remains 100 epochs with
+epoch and exactly 96 training batches in total. Full training remains 100 epochs with
 the unchanged matched scientific settings.
+
+The fourth failed smoke completed two epochs / 64 batches with eight natural
+AMP optimizer attempts, all skipped by GradScaler. It recorded zero successful
+SGD updates and empty optimizer state. The reviewed scaler evidence shows that
+scale 256 was reached only after the final attempt, so no attempt tested that
+scale. Under the reviewed installed Ultralytics 8.4.130 behavior, the three-epoch
+bound provides 14 natural attempts, at global one-based batches
+`1, 2, 3, 5, 7, 10, 14, 19, 26, 35, 47, 62, 78, 94`. After the observed eight
+backoff skips, the ninth attempt naturally tests scale 256. This is an opportunity
+for normal dynamic scaling; it does not establish that scale 256 will succeed.
+No AMP workaround is introduced: the initial scale, scaler state, optimizer
+steps, accumulation settings and scientific hyperparameters are unchanged.
+Success still requires at least one actual SGD step and independent optimizer
+state evidence. All four historical failed attempts remain preserved.
 
 This is a technical test of loading, CUDA, forward/backward optimization,
 four-class mapping, memory feasibility and checkpoint writing. Its losses or
@@ -228,7 +242,7 @@ the specific cause in a reviewed correction before retrying.
 ```
 
 This fresh-run command repeats preflight and train/val byte checks, and requires
-a completed two-epoch smoke receipt with identical model/config/source/dataset
+a completed three-epoch / 96-batch smoke receipt with identical model/config/source/dataset
 identity and unchanged persisted checkpoint/results hashes. The smoke
 `completion.json` is bound to both the exact verified clean Git `HEAD` commit and
 the committed-tree source hash. Full training rejects the receipt when either
