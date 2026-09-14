@@ -1,10 +1,11 @@
 # Experiment 2: matched pretrained YOLO26s
 
-Status: preparation tooling with four preserved failed smoke attempts. No smoke
-completion has been approved, and full training has not been run. This implements
-the PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN detector experiment.
-The preceding reviewed project commit is
-`95df7f1e85c8101b2fd9b1f0a4538a431234f557`.
+Status: full training paused after completed epoch 33. The dedicated first-resume
+implementation is prepared for review and a separate user-created commit; it has
+not resumed training. Earlier smoke attempts remain historical evidence. This
+implements the PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN experiment.
+The original full-training commit is
+`39070294088a725edf9092d861e5da4d750acd25`.
 
 ## Scientific design
 
@@ -235,7 +236,7 @@ The smoke directory is:
 An existing directory, even partial, is refused. Keep failed evidence and resolve
 the specific cause in a reviewed correction before retrying.
 
-## Future full training — DOCUMENT ONLY, not executed in this phase
+## Fresh full training — refuses the existing run
 
 ```powershell
 .\.venv\Scripts\python.exe src\road_damage\training\experiment2.py --train
@@ -267,18 +268,96 @@ as the dataset cache version is preserved so a cache rescan remains valid.
 Generated cache metadata is not part of the experiment identity.
 Completion requires finite contiguous results and both best/last checkpoints.
 
-This launcher supports **fresh full training only**. Native within-process early
-stopping uses patience 20; epoch state records stopper/optimizer/scaler evidence
-for any future reviewed resume extension. `last.pt` should normally exist after
-at least one successfully saved training epoch, but it may be absent if training
-fails or is interrupted before the first checkpoint save. The presence of
-`last.pt` does **not** authorize an improvised resume command. The current
-Experiment 2 launcher exposes no approved resume workflow and deliberately does
-not reuse the baseline's hardcoded resume policy or mislabel Experiment 2 as
-Experiment 1. If full training is interrupted, **STOP** and preserve the partial
-run. Resume support requires separate reviewed tooling and provenance checks
-before use; neither a generic resume command nor restarting in the same directory
-is supported here.
+`--train` remains fresh-run only and rejects the current existing directory.
+`--smoke` remains exactly three epochs / 96 batches with its existing gates.
+Only the dedicated, narrowly pinned `--resume` operation below may reuse the
+interrupted full-run directory. Raw Ultralytics resume commands are forbidden.
+
+## First resume — epoch 33 checkpoint only, USER operation after review/commit
+
+```powershell
+.\.venv\Scripts\python.exe src\road_damage\training\experiment2.py --resume
+```
+
+Do not run this command until the new support has been reviewed and committed.
+The CLI accepts no checkpoint, model, output, dataset, epoch, LR, augmentation,
+or other scientific override. This first implementation is restricted to:
+
+`outputs/training/experiment2_yolo26s_matched/yolo26s_rdd2022-india-japan-v1.1.0_640_seed42/weights/last.pt`
+
+Approved SHA-256:
+`12eb8c95a0bc9a34943836d8362d1058e86c8ff56db19e0ff906267451bb5809`.
+Approved size: **40,374,049 bytes**. Stored epoch is 32 (zero-based): human
+epochs 1–33 are complete, the next human epoch is **34**, and the target is still
+**100**, not a new 67-epoch experiment. Exactly 33 contiguous finite results rows
+and the matching epoch-state/checkpoint identity are required. A completion
+receipt, changed checkpoint, missing interruption, or existing resume-attempt
+reservation prevents execution. A subsequent interruption requires separate
+review; there is no general resume/retry/force mode.
+
+The interrupted epoch 34 processed 35 batches and two optimizer operations after
+the durable checkpoint. Those partial updates are discarded by loading last.pt;
+epoch 34 is replayed from its beginning. Initial durable project evidence is:
+
+- completed epochs: 33;
+- completed batches: **104,115** = 33 × 3,155;
+- optimizer/AMP attempts: **7,713**;
+- successful SGD updates: **7,703**.
+
+The original failure record's 104,150 batches / 7,715 attempts / 7,705 updates
+are preserved as interruption evidence and never initialize resumed progress.
+
+The native call uses the explicit canonical checkpoint as the sole `resume`
+argument. Installed Ultralytics 8.4.130 trainer/model/torch-helper sources are
+also hash-checked. Native resume loads the original SGD state (366 momentum
+buffers in three parameter groups), GradScaler (scale 512, growth tracker 1645),
+EMA network and EMA counter. The project compares those restored states with the
+checkpoint before the first resumed epoch. It does not reset or manually step
+the optimizer, scaler, or EMA. The successful-step post-hook retains its existing
+meaning and is removed when the invocation ends.
+
+Ultralytics reconstructs the cosine schedule with the original 100-epoch target,
+sets `start_epoch=33`, then `scheduler.last_epoch=32`. The first resumed epoch
+advances the scheduler to zero-based epoch 33; LR does not restart at epoch 1.
+Project callbacks verify the scheduler position and LR without overriding them.
+At `on_pretrain_routine_end`, after native checkpoint restoration and before the
+first resumed epoch, the project restores EarlyStopping `best_epoch=33`,
+`best_fitness=0.18374`, `patience=20`, and `possible_stop=false`. The patience
+clock therefore starts with zero completed epochs without improvement.
+
+The original segment remains attributed to commit
+`39070294088a725edf9092d861e5da4d750acd25` and source fingerprint
+`a33facf065a4004fd32f673df716c05b1f5783dbd5899481ef99c957ac1b2b57`.
+The frozen config remains
+`0ae18ab9fa2d1098eefed24b2b75f5ed6f94b9e2bce773396d6402339cdaafe9`.
+Resume requires a clean descendant commit changing only the explicit resume
+tooling/docs/tests allowlist. The new commit and committed-tree source fingerprint
+apply only to the resumed segment, starting at epoch 34.
+
+At user execution, `resume_attempts/0001/STARTED.json` is created exclusively.
+The reservation also prevents concurrent or silent repeat execution. Original
+manifest, args, failure, epoch-state, results, YAML and input checkpoint are copied
+byte-for-byte into that attempt's `original_segment/` before native training.
+The original manifest, failure, args and epoch-state files remain unchanged;
+native resumed args are redirected to `resume_attempts/0001/args.yaml`.
+Each completed resumed epoch gets a new immutable `epochs/epoch_NNN.json` record.
+An interruption or error appends `INTERRUPTED.json` or `FAILED.json` with both
+observed and durable progress. Completion requires full finite epoch evidence,
+the expected target or exhausted patience, verified resulting checkpoints, and
+every persisted resumed-epoch record in sequence matching the final durable
+state. Completion also records the hashes of those epoch records.
+It appends `COMPLETED.json` and publishes the canonical completion receipt with
+both training segments; original epochs are never reclassified under new code.
+If final receipt publication fails after the attempt's completion record is
+durable, preserve the evidence and stop for review rather than rerun training.
+
+Before execution, the original config, pretrained lineage, train/val YAML and
+export metadata hashes are verified, followed by the same train/val-only byte
+verification. Dataset/cache files remain immutable. Runtime paths and class
+mapping are checked before dataset loading and before the first resumed epoch.
+Every resume record declares `internal_test_files_accessed=false`; individual
+internal-test data remains locked and is never used for training, validation,
+inference, debugging, or threshold selection.
 
 After completion, checkpoint selection and operating-point selection must use
 validation only, with the same metric philosophy as the baseline and explicit
@@ -287,7 +366,7 @@ end-to-end output semantics. No internal-test evaluation is authorized here.
 ## Verification commands
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_experiment2.py -v
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_experiment2*.py" -v
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 

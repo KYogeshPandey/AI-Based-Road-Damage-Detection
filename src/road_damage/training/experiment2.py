@@ -677,7 +677,7 @@ def launch(mode: str, root: Path = PROJECT_ROOT) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     actions = parser.add_mutually_exclusive_group(required=True)
-    for action in ("acquire-pretrained", "preflight", "smoke", "train"):
+    for action in ("acquire-pretrained", "preflight", "smoke", "train", "resume"):
         actions.add_argument(f"--{action}", action="store_true")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -688,6 +688,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = preflight()
             print(json.dumps(report, indent=2))
             return 0 if report["ready_for_smoke"] else 2
+        elif args.resume:
+            from road_damage.training.experiment2_resume import resume
+            resume()
         else:
             launch("smoke" if args.smoke else "train")
     except (Error, OSError, ValueError, KeyError, ImportError, subprocess.SubprocessError) as exc:
