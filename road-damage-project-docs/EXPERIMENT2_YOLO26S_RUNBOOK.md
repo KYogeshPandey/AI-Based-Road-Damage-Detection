@@ -1,8 +1,9 @@
 # Experiment 2: matched pretrained YOLO26s
 
-Status: full training paused after completed epoch 33. The dedicated first-resume
-implementation is prepared for review and a separate user-created commit; it has
-not resumed training. Earlier smoke attempts remain historical evidence. This
+Status: full training paused after completed epoch 60, during partial epoch 61.
+The first controlled resume completed epochs 34–60. The repeated-resume durable
+state correction is prepared for review and a separate user-created commit; it
+has not executed another resume. Earlier smoke attempts remain historical evidence. This
 implements the PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN experiment.
 The original full-training commit is
 `39070294088a725edf9092d861e5da4d750acd25`.
@@ -107,7 +108,7 @@ No installation or environment repair is part of these commands.
 
 The pre-existing `weights/yolo26n.pt` remains only the verified framework AMP
 check artifact. It cannot replace YOLO26s as the training input. Native AMP
-checking runs only during a user-started smoke/full training operation, never
+checking runs only during a user-started smoke/full/resumed training operation, never
 during preflight. Framework downloads, automatic installation, and external
 integration callbacks are disabled during weight inspection and training.
 Missing local resources fail rather than being acquired inside training.
@@ -273,81 +274,109 @@ Completion requires finite contiguous results and both best/last checkpoints.
 Only the dedicated, narrowly pinned `--resume` operation below may reuse the
 interrupted full-run directory. Raw Ultralytics resume commands are forbidden.
 
-## First resume — epoch 33 checkpoint only, USER operation after review/commit
+## Controlled repeated resume — USER operation after review/commit
 
 ```powershell
 .\.venv\Scripts\python.exe src\road_damage\training\experiment2.py --resume
 ```
 
-Do not run this command until the new support has been reviewed and committed.
+Do not run this command until the durable-state correction has been reviewed and committed.
 The CLI accepts no checkpoint, model, output, dataset, epoch, LR, augmentation,
-or other scientific override. This first implementation is restricted to:
+or other scientific override. Every invocation resolves only the canonical current:
 
 `outputs/training/experiment2_yolo26s_matched/yolo26s_rdd2022-india-japan-v1.1.0_640_seed42/weights/last.pt`
 
-Approved SHA-256:
-`12eb8c95a0bc9a34943836d8362d1058e86c8ff56db19e0ff906267451bb5809`.
-Approved size: **40,374,049 bytes**. Stored epoch is 32 (zero-based): human
-epochs 1–33 are complete, the next human epoch is **34**, and the target is still
-**100**, not a new 67-epoch experiment. Exactly 33 contiguous finite results rows
-and the matching epoch-state/checkpoint identity are required. A completion
-receipt, changed checkpoint, missing interruption, or existing resume-attempt
-reservation prevents execution. A subsequent interruption requires separate
-review; there is no general resume/retry/force mode.
+Current authoritative epoch-60 checkpoint SHA-256:
+`335a4b825d1dd30f80caf68d844e12f023ad3a5e873bb9dd1d851ec9a946e5e4`.
+Size: **40,377,697 bytes**. Stored epoch is 59 (zero-based), so the next human
+epoch is **61/100**, not a new 40-epoch experiment.
 
-The interrupted epoch 34 processed 35 batches and two optimizer operations after
-the durable checkpoint. Those partial updates are discarded by loading last.pt;
-epoch 34 is replayed from its beginning. Initial durable project evidence is:
+Historical segments are immutable:
 
-- completed epochs: 33;
-- completed batches: **104,115** = 33 × 3,155;
-- optimizer/AMP attempts: **7,713**;
-- successful SGD updates: **7,703**.
+- epochs 1–33: original training, commit `39070294088a725edf9092d861e5da4d750acd25`;
+- epochs 34–60: first controlled resume, commit `0312871fb275725699913e08baaacab570c7296f`,
+  source `7740bc7d2c1516969f081885ea4fe317ef3c9237cb5ce5612b01e4474e44d28a`;
+- partial epoch 61: interrupted, not a completed epoch and not a new result row.
 
-The original failure record's 104,150 batches / 7,715 attempts / 7,705 updates
-are preserved as interruption evidence and never initialize resumed progress.
+The old resume callback wrote immutable per-epoch records but did not advance
+the root `epoch_state.json`. The root file consequently still describes epoch 33.
+The correction does **not** manually rewrite this real file during implementation.
+For this reviewed migration only, the launcher verifies the exact epoch-60
+checkpoint, 60 contiguous complete results rows, the byte-pinned first-attempt
+records and epoch-60 journal, and the known stale root-state bytes. It reconciles
+checkpoint epoch 59, optimizer/scaler/EMA state, and counters before accepting
+epoch 60 in memory. No other stale state is silently repaired.
+
+Durable progress at this boundary is **60 epochs / 189,300 batches / 13,038
+optimizer attempts / 13,026 successful updates**. The interruption observed
+189,556 batches / 13,054 attempts / 13,042 updates. The extra **256 batches and
+16 optimizer operations** in partial epoch 61 are discarded; epoch 61 is replayed
+from batch 1. Failure/observed counters never initialize durable progress.
 
 The native call uses the explicit canonical checkpoint as the sole `resume`
-argument. Installed Ultralytics 8.4.130 trainer/model/torch-helper sources are
+argument. Installed Ultralytics 8.4.130 trainer/model/torch-helper/metrics/validator sources are
 also hash-checked. Native resume loads the original SGD state (366 momentum
-buffers in three parameter groups), GradScaler (scale 512, growth tracker 1645),
+buffers in three parameter groups), GradScaler (currently scale 512, growth tracker 864),
 EMA network and EMA counter. The project compares those restored states with the
 checkpoint before the first resumed epoch. It does not reset or manually step
 the optimizer, scaler, or EMA. The successful-step post-hook retains its existing
 meaning and is removed when the invocation ends.
 
 Ultralytics reconstructs the cosine schedule with the original 100-epoch target,
-sets `start_epoch=33`, then `scheduler.last_epoch=32`. The first resumed epoch
-advances the scheduler to zero-based epoch 33; LR does not restart at epoch 1.
+sets `start_epoch=60`, then `scheduler.last_epoch=59`. The next resumed epoch
+advances the scheduler to zero-based epoch 60; LR does not restart at epoch 1.
 Project callbacks verify the scheduler position and LR without overriding them.
 At `on_pretrain_routine_end`, after native checkpoint restoration and before the
-first resumed epoch, the project restores EarlyStopping `best_epoch=33`,
-`best_fitness=0.18374`, `patience=20`, and `possible_stop=false`. The patience
-clock therefore starts with zero completed epochs without improvement.
+first resumed epoch, the project restores EarlyStopping from the complete results.
+Installed detection fitness uses mAP50–95 alone, weights `[0, 0, 0, 1]`; the
+training validator rounds this and the recorded metric to five decimal places.
+The installed stopper accepts strictly greater fitness, except while its best
+fitness is zero. Equal nonzero values do not restart patience.
+Through epoch 60 this gives **best_epoch=59, best_fitness=0.21557, patience=20,
+epochs_without_improvement=1, patience_exhausted=false, possible_stop=false**.
+Checkpoint best fitness and epoch journals must agree with this reconstruction.
 
 The original segment remains attributed to commit
 `39070294088a725edf9092d861e5da4d750acd25` and source fingerprint
 `a33facf065a4004fd32f673df716c05b1f5783dbd5899481ef99c957ac1b2b57`.
 The frozen config remains
 `0ae18ab9fa2d1098eefed24b2b75f5ed6f94b9e2bce773396d6402339cdaafe9`.
-Resume requires a clean descendant commit changing only the explicit resume
-tooling/docs/tests allowlist. The new commit and committed-tree source fingerprint
-apply only to the resumed segment, starting at epoch 34.
+Resume requires a clean descendant of the first-resume commit, changing only the
+explicit resume tooling/docs/tests allowlist. The new commit and source fingerprint
+apply only to its new segment, beginning at epoch 61 for the current migration.
 
-At user execution, `resume_attempts/0001/STARTED.json` is created exclusively.
-The reservation also prevents concurrent or silent repeat execution. Original
-manifest, args, failure, epoch-state, results, YAML and input checkpoint are copied
-byte-for-byte into that attempt's `original_segment/` before native training.
-The original manifest, failure, args and epoch-state files remain unchanged;
-native resumed args are redirected to `resume_attempts/0001/args.yaml`.
-Each completed resumed epoch gets a new immutable `epochs/epoch_NNN.json` record.
-An interruption or error appends `INTERRUPTED.json` or `FAILED.json` with both
-observed and durable progress. Completion requires full finite epoch evidence,
-the expected target or exhausted patience, verified resulting checkpoints, and
-every persisted resumed-epoch record in sequence matching the final durable
-state. Completion also records the hashes of those epoch records.
-It appends `COMPLETED.json` and publishes the canonical completion receipt with
-both training segments; original epochs are never reclassified under new code.
+An OS-held, nonblocking run lock prevents concurrent resume processes and releases
+on process death. Attempts are numbered `0002`, `0003`, etc., created exclusively;
+earlier attempts are never reused or overwritten. Each new `STARTED.json` records
+the complete prior segment list, hashes of prior history, input identities and
+discarded partial progress. Original input metadata/checkpoint bytes are copied
+into the new attempt's `input_snapshot/`; native args are saved in that attempt.
+The original manifest, failure, args and first-attempt history remain immutable.
+
+After each native `on_model_save`, the callback requires a complete batch count,
+finite contiguous CSV rows, a full matching checkpoint, and matching stopper state.
+It writes/fsyncs a new immutable `epochs/epoch_NNN.json`, then writes/fsyncs a
+temporary root-state file and atomically replaces `epoch_state.json`. That pointer
+records the completed epoch, checkpoint SHA/size, results SHA, optimizer counters,
+optimizer/scaler presence, EarlyStopping fields, source/config identities, and
+epoch-journal path/SHA. Durable in-memory progress advances only after publication.
+Partial epochs cannot publish this state.
+
+Subsequent pauses use the latest fully committed project state, without another
+hard-coded checkpoint approval. Checkpoint epoch + 1, complete CSV row count,
+last CSV epoch, root state, immutable journal, and checkpoint SHA must all agree.
+Unknown/gapped history, stripped/missing state, exhausted patience, scientific
+drift, or a completed receipt fails closed. An interrupted publication leaves a
+detectable disagreement and requires review; there is no force mode or arbitrary
+stale-state repair. An abrupt process exit is resumable only when this complete
+durable evidence remains consistent; unfinished history is retained explicitly.
+
+An interruption/error appends `INTERRUPTED.json`/`FAILED.json` with separate
+observed and durable progress. Completion requires the target or exhausted
+patience, finite complete evidence, verified resulting checkpoints, matching root
+state and every saved epoch record. `COMPLETED.json` and the canonical receipt
+retain all training segments and epoch-record hashes. Native final checkpoint
+stripping occurs only on normal completion; completed runs cannot resume.
 If final receipt publication fails after the attempt's completion record is
 durable, preserve the evidence and stop for review rather than rerun training.
 

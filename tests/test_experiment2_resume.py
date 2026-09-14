@@ -63,6 +63,12 @@ class PinAndInterfaceTests(unittest.TestCase):
         self.assertEqual(resume_tool.CHECKPOINT_SHA256,
                          "12eb8c95a0bc9a34943836d8362d1058e86c8ff56db19e0ff906267451bb5809")
         self.assertEqual(resume_tool.CHECKPOINT_BYTES, 40374049)
+        self.assertEqual(resume_tool.MIGRATION_CHECKPOINT_SHA256,
+                         "335a4b825d1dd30f80caf68d844e12f023ad3a5e873bb9dd1d851ec9a946e5e4")
+        self.assertEqual(resume_tool.MIGRATION_CHECKPOINT_BYTES, 40377697)
+        self.assertEqual(resume_tool.MIGRATION_COMMIT, "0312871fb275725699913e08baaacab570c7296f")
+        self.assertEqual(resume_tool.MIGRATION_SOURCE_SHA256,
+                         "7740bc7d2c1516969f081885ea4fe317ef3c9237cb5ce5612b01e4474e44d28a")
         self.assertEqual(tool.sha256_file(ROOT / tool.CONFIG),
                          "0ae18ab9fa2d1098eefed24b2b75f5ed6f94b9e2bce773396d6402339cdaafe9")
         self.assertEqual(set(resume_tool.RESUME_FILES), {
@@ -111,8 +117,9 @@ class ResumeFixtureTests(unittest.TestCase):
                 (self.root / self.config["source_dataset"] / kind / split).mkdir(parents=True)
         (self.run / "train_val.yaml").write_text(yaml.safe_dump(self.data), encoding="utf-8")
         fields = ["epoch", "time", "train/box_loss", "train/cls_loss", "train/l1_loss",
-                  "val/box_loss", "val/cls_loss", "val/l1_loss"]
+                  "val/box_loss", "val/cls_loss", "val/l1_loss", "metrics/mAP50-95(B)"]
         self.rows = [{k: str(epoch) if k == "epoch" else "0.1" for k in fields} for epoch in range(1, 34)]
+        self.rows[-1]["metrics/mAP50-95(B)"] = "0.18374"
         self.write_rows(self.rows)
         model = TinyDetector()
         optimizer = optimizer_for(model)
@@ -167,11 +174,20 @@ class ResumeFixtureTests(unittest.TestCase):
             writer = csv.DictWriter(stream, fieldnames=list(self.rows[0]) if hasattr(self, "rows") else list(rows[0]))
             writer.writeheader()
             writer.writerows(rows)
-        if hasattr(self, "hashes"):
-            self.hashes["results.csv"] = tool.sha256_file(self.run / "results.csv")
 
     def inspect(self):
         return resume_tool._inspect_run(self.root, self.config, self.identity, self.dataset_report)
+
+    def save_synthetic_checkpoint(self, trainer, rows):
+        checkpoint = copy.deepcopy(self.checkpoint)
+        checkpoint.update(epoch=trainer.epoch, updates=trainer.ema.updates,
+                          best_fitness=trainer.stopper.best_fitness, scaler=trainer.scaler.state_dict(),
+                          ema=copy.deepcopy(trainer.ema.ema).half(), optimizer=trainer.optimizer.state_dict(),
+                          train_args={**self.saved_args, "model": str(self.path), "resume": str(self.path)},
+                          train_results={key: [float(row[key]) for row in rows] for key in rows[0]})
+        for group in checkpoint["optimizer"]["param_groups"]:
+            group["lr"] = .01 * (((1 - math.cos(trainer.epoch * math.pi / 100)) / 2) * (.01 - 1) + 1)
+        torch.save(checkpoint, self.path)
 
     def trainer(self, state):
         from ultralytics.engine.trainer import BaseTrainer
@@ -490,12 +506,13 @@ class ResumeFixtureTests(unittest.TestCase):
             trainer.stopper(completed, .1)
             rows.append({**rows[-1], "epoch": str(completed)})
             self.write_rows(rows)
+            self.save_synthetic_checkpoint(trainer, rows)
             callbacks.after_save(trainer)
         (self.run / "weights/best.pt").write_bytes(self.path.read_bytes())
         return state, callbacks, started
 
     def test_completion_appends_two_segments_and_hashes_all_epoch_records(self):
-        original = {name: (self.run / name).read_bytes() for name in self.hashes if name != "results.csv"}
+        original = {name: (self.run / name).read_bytes() for name in self.hashes if name not in {"results.csv", "epoch_state.json"}}
         state, callbacks, started = self.simulate_completed_epoch_records()
         with patch.object(tool, "_verify_completed_checkpoint") as verify:
             resume_tool._finish(state, callbacks, started)
@@ -542,7 +559,8 @@ class ResumeFixtureTests(unittest.TestCase):
             self.assertFalse((state.attempt / "COMPLETED.json").exists())
 
     def test_git_transition_refuses_original_commit_and_unrelated_changes(self):
-        for commit, changed in ((resume_tool.ORIGINAL_COMMIT, ""), ("a" * 40, "M\tconfigs/training/experiment2_yolo26s_matched.yaml\n"),
+        for commit, changed in ((resume_tool.ORIGINAL_COMMIT, ""), (resume_tool.MIGRATION_COMMIT, ""),
+                                ("a" * 40, "M\tconfigs/training/experiment2_yolo26s_matched.yaml\n"),
                                 ("a" * 40, "D\tsrc/road_damage/training/experiment2.py\n")):
             with self.subTest(commit=commit, changed=changed), \
                  patch.object(tool, "verify_git", return_value={"commit": commit}), \
@@ -605,6 +623,245 @@ class ResumeFixtureTests(unittest.TestCase):
         smoke = tool.training_arguments(self.root, self.config, "smoke", self.root / "snapshot.yaml")
         self.assertEqual((smoke["epochs"], smoke["batch"], smoke["imgsz"], smoke["resume"]), (3, 4, 640, False))
         self.assertEqual(tool._smoke_workload(self.config), (3, 32, 96))
+
+    def migration_fixture(self):
+        """Create the reviewed legacy shape entirely in the temporary directory."""
+        state = self.inspect()
+        git = {"commit": "0312871fb275725699913e08baaacab570c7296f", "source_state": {
+            "source_tree_sha256": "7740bc7d2c1516969f081885ea4fe317ef3c9237cb5ce5612b01e4474e44d28a"}}
+        started = resume_tool._start_attempt(state, git, {})
+        started["schema_version"] = "experiment2.resume_epoch33.v1"
+        (state.attempt / "STARTED.json").write_text(json.dumps(started))
+        resume_tool._snapshot_original(state)
+        trainer = self.trainer(state)
+        rows = list(self.rows)
+        for epoch in range(34, 61):
+            fitness = .21557 if epoch == 59 else .21535 if epoch == 60 else round(.19 + (epoch - 34) * .0009, 5)
+            rows.append({**rows[-1], "epoch": str(epoch), "metrics/mAP50-95(B)": str(fitness)})
+            attempts = 7713 + (epoch - 33) * 5325 // 27
+            evidence = {**resume_tool._initial_progress(state), "epochs_completed": epoch,
+                "batches_completed": epoch * 3155, "optimizer_step_attempts": attempts, "optimizer_updates": attempts - 12,
+                **resume_tool._recover_stopper(rows), "config_sha256": resume_tool.FROZEN_CONFIG_SHA256,
+                "last_sha256": "e" * 64, "internal_test_files_accessed": False}
+            (state.attempt / "epochs" / f"epoch_{epoch:03d}.json").write_text(json.dumps(evidence))
+        self.write_rows(rows)
+        trainer.epoch = 59
+        trainer.ema.updates = 13038
+        trainer.stopper.best_epoch, trainer.stopper.best_fitness = 59, .21557
+        trainer.scaler.load_state_dict({**trainer.scaler.state_dict(), "_growth_tracker": 864})
+        self.save_synthetic_checkpoint(trainer, rows)
+        digest = tool.sha256_file(self.path)
+        evidence["last_sha256"] = digest
+        (state.attempt / "epochs/epoch_060.json").write_text(json.dumps(evidence))
+        progress = {key: evidence[key] for key in resume_tool._progress_keys()}
+        interrupted = {**started, "status": "INTERRUPTED", "durable_progress": progress,
+            "observed_progress": {**progress, "batches_completed": 189556, "optimizer_step_attempts": 13054,
+                                  "optimizer_updates": 13042}, "resulting_last_checkpoint_sha256": digest}
+        (state.attempt / "INTERRUPTED.json").write_text(json.dumps(interrupted))
+        pins = {relative: tool.sha256_file(self.run / relative) for relative in resume_tool.MIGRATION_ARTIFACTS}
+        self.stack.enter_context(patch.object(resume_tool, "MIGRATION_ARTIFACTS", pins))
+        self.stack.enter_context(patch.object(resume_tool, "MIGRATION_CHECKPOINT_SHA256", digest))
+        self.stack.enter_context(patch.object(resume_tool, "MIGRATION_CHECKPOINT_BYTES", self.path.stat().st_size))
+        return self.inspect()
+
+    def advance_synthetic_resume(self, state, *, final_epoch=62, fail_pointer=False, interrupted=True):
+        started = self.start(state)
+        trainer = self.trainer(state)
+        callbacks = resume_tool._ResumeCallbacks(state)
+        self.addCleanup(callbacks.close)
+        callbacks.restore(trainer)
+        rows = list(state.rows)
+        for completed in range(len(rows) + 1, final_epoch + 1):
+            trainer.epoch = completed - 1
+            trainer.ema.updates += 200
+            callbacks.progress["batches_completed"] = completed * 3155
+            callbacks.progress["optimizer_updates"] += 200
+            fitness = round(.22 + (completed - 61) * .001, 5)
+            trainer.stopper(completed, fitness)
+            rows.append({**rows[-1], "epoch": str(completed), "metrics/mAP50-95(B)": str(fitness)})
+            self.write_rows(rows)
+            self.save_synthetic_checkpoint(trainer, rows)
+            if fail_pointer:
+                with patch.object(resume_tool.os, "replace", side_effect=OSError("synthetic pointer failure")), self.assertRaises(OSError):
+                    callbacks.after_save(trainer)
+                return callbacks
+            callbacks.after_save(trainer)
+            pointer = json.loads((self.run / "epoch_state.json").read_text())
+            self.assertEqual(pointer["completed_epoch"], completed)
+            self.assertEqual(pointer["last_sha256"], tool.sha256_file(self.path))
+            self.assertEqual(pointer["results_sha256"], tool.sha256_file(self.run / "results.csv"))
+        interruption = {**started, "status": "INTERRUPTED", "durable_progress": callbacks.durable,
+            "observed_progress": {**callbacks.progress, "batches_completed": callbacks.progress["batches_completed"] + 3},
+            "resulting_last_checkpoint_sha256": tool.sha256_file(self.path)}
+        if interrupted:
+            resume_tool._write_new_json(state.attempt / "INTERRUPTED.json", interruption)
+        return callbacks
+
+    def test_epoch60_migration_is_read_only_and_recovers_epoch61_durable_progress(self):
+        state = self.migration_fixture()
+        self.assertTrue(state.migration)
+        self.assertEqual(state.epoch_state["completed_epoch"], 60)
+        self.assertEqual(state.checkpoint["epoch"], 59)
+        self.assertEqual(state.attempt.name, "0002")
+        self.assertEqual(json.loads((self.run / "epoch_state.json").read_text())["completed_epoch"], 33)
+        progress = resume_tool._initial_progress(state)
+        self.assertEqual([progress[key] for key in ("epochs_completed", "batches_completed", "optimizer_step_attempts", "optimizer_updates")],
+                         [60, 189300, 13038, 13026])
+        started = self.start(state)
+        self.assertEqual(started["resumed_start_epoch"], 61)
+        self.assertEqual(started["discarded_partial_epoch"], {
+            "epoch": 61, "batches": 256, "optimizer_step_attempts": 16, "optimizer_updates": 16})
+
+    def test_epoch61_native_scheduler_state_and_recovered_stopper(self):
+        state = self.migration_fixture()
+        trainer = self.trainer(state)
+        callbacks = resume_tool._ResumeCallbacks(state)
+        self.addCleanup(callbacks.close)
+        callbacks.restore(trainer)
+        self.assertEqual((trainer.start_epoch, trainer.epochs, trainer.scheduler.last_epoch), (60, 100, 59))
+        self.assertEqual((trainer.stopper.best_epoch, trainer.stopper.best_fitness, trainer.stopper.patience), (59, .21557, 20))
+        self.assertFalse(trainer.stopper.possible_stop)
+        self.assertEqual(trainer.scaler.state_dict()["_growth_tracker"], 864)
+        self.assertEqual(trainer.ema.updates, 13038)
+        trainer.epoch = 60
+        callbacks.before_epoch(trainer)
+        trainer.scheduler.step()
+        callbacks.before_batch(trainer)
+        expected = .01 * ((1 + math.cos(60 * math.pi / 100)) * .99 / 2 + .01)
+        self.assertTrue(all(math.isclose(g["lr"], expected) for g in trainer.optimizer.param_groups))
+
+    def test_results_fitness_recovery_matches_native_metric_and_early_stopping(self):
+        from ultralytics.utils.metrics import Metric
+        from ultralytics.utils.torch_utils import EarlyStopping
+        for scores in ([0., 0., .2, .2, .1], [.2, .3, .29], [0.] * 4):
+            rows = [{"epoch": str(i), "metrics/mAP50-95(B)": str(score)} for i, score in enumerate(scores, 1)]
+            native = EarlyStopping(20)
+            for i, score in enumerate(scores, 1):
+                with patch.object(Metric, "mean_results", return_value=[.9, .8, .7, score]):
+                    self.assertEqual(Metric().fitness(), score)
+                    native(i, Metric().fitness())
+            recovered = resume_tool._recover_stopper(rows)
+            self.assertEqual((recovered["best_epoch"], recovered["best_fitness"]), (native.best_epoch, native.best_fitness))
+            self.assertEqual(recovered["epochs_without_improvement"], len(rows) - native.best_epoch)
+        state = self.migration_fixture()
+        self.assertEqual(resume_tool._recover_stopper(state.rows), {
+            "best_epoch": 59, "best_fitness": .21557, "patience": 20, "epochs_without_improvement": 1, "patience_exhausted": False})
+
+    def test_completed_epochs_publish_state_and_third_resume_needs_no_new_pin(self):
+        state = self.migration_fixture()
+        history_before = {str(p): p.read_bytes() for p in (self.run / "resume_attempts/0001").rglob("*") if p.is_file()}
+        original_failure = (self.run / "failure.json").read_bytes()
+        self.advance_synthetic_resume(state, final_epoch=62)
+        third = self.inspect()
+        self.assertFalse(third.migration)
+        self.assertEqual(third.attempt.name, "0003")
+        self.assertEqual(third.epoch_state["completed_epoch"], 62)
+        self.assertEqual(self.trainer(third).start_epoch + 1, 63)
+        self.assertEqual([(s["first_epoch"], s["last_completed_epoch"]) for s in third.segments], [(1, 33), (34, 60), (61, 62)])
+        self.assertEqual(third.segments[1]["git_commit"], "0312871fb275725699913e08baaacab570c7296f")
+        self.assertEqual(third.segments[2]["git_commit"], "a" * 40)
+        self.assertEqual({str(p): p.read_bytes() for p in (self.run / "resume_attempts/0001").rglob("*") if p.is_file()}, history_before)
+        self.assertEqual((self.run / "failure.json").read_bytes(), original_failure)
+        # Continue yet again with the same code, still only synthetic checkpoint writes.
+        self.advance_synthetic_resume(third, final_epoch=63)
+        self.assertEqual(self.inspect().epoch_state["completed_epoch"], 63)
+
+    def test_partial_epoch61_never_advances_state_or_accepts_a_checkpoint_save(self):
+        state = self.migration_fixture()
+        original = (self.run / "epoch_state.json").read_bytes()
+        self.start(state)
+        trainer = self.trainer(state)
+        callbacks = resume_tool._ResumeCallbacks(state)
+        self.addCleanup(callbacks.close)
+        callbacks.restore(trainer)
+        trainer.epoch, trainer.loss = 60, torch.tensor(.1)
+        callbacks.after_batch(trainer)
+        with self.assertRaises(tool.Error):
+            callbacks.after_save(trainer)
+        self.assertEqual((self.run / "epoch_state.json").read_bytes(), original)
+        self.assertEqual(callbacks.durable["batches_completed"], 189300)
+        self.assertFalse((state.attempt / "epochs/epoch_061.json").exists())
+
+    def test_epoch_pointer_write_failure_does_not_advance_durable_state_or_authorize_resume(self):
+        state = self.migration_fixture()
+        before = (self.run / "epoch_state.json").read_bytes()
+        callbacks = self.advance_synthetic_resume(state, final_epoch=61, fail_pointer=True)
+        self.assertEqual((self.run / "epoch_state.json").read_bytes(), before)
+        self.assertEqual(callbacks.durable["epochs_completed"], 60)
+        self.assertTrue((state.attempt / "epochs/epoch_061.json").exists())
+        with self.assertRaises(tool.Error):
+            self.inspect()
+        self.assertFalse((self.run / "completion.json").exists())
+
+    def test_migration_rejects_unreviewed_sha_stale_state_and_results_disagreement(self):
+        state = self.migration_fixture()
+        for name, value in (("MIGRATION_CHECKPOINT_SHA256", "0" * 64), ("MIGRATION_CHECKPOINT_BYTES", 1)):
+            with self.subTest(name=name), patch.object(resume_tool, name, value), self.assertRaises(tool.Error):
+                self.inspect()
+        original = (self.run / "results.csv").read_bytes()
+        for rows in (state.rows[:-1], state.rows[:40] + state.rows[41:],
+                     state.rows + [{**state.rows[-1], "epoch": "61"}]):
+            self.write_rows(rows)
+            with self.subTest(rows=len(rows)), self.assertRaises(tool.Error):
+                self.inspect()
+        (self.run / "results.csv").write_bytes(original)
+        for key, value in (("epoch", 60), ("epoch", -1), ("optimizer", None), ("scaler", None), ("ema", None)):
+            checkpoint = copy.deepcopy(state.checkpoint)
+            checkpoint[key] = value
+            with self.subTest(key=key), patch.object(resume_tool, "_load_checkpoint", return_value=checkpoint), self.assertRaises(tool.Error):
+                self.inspect()
+
+    def test_future_resume_rejects_pointer_sha_and_checkpoint_disagreement(self):
+        state = self.migration_fixture()
+        self.advance_synthetic_resume(state)
+        pointer_path = self.run / "epoch_state.json"
+        original = pointer_path.read_bytes()
+        for key, value in (("completed_epoch", 61), ("last_sha256", "0" * 64), ("epoch_record_sha256", "0" * 64),
+                           ("best_epoch", 33), ("optimizer_updates", 1), ("internal_test_files_accessed", True)):
+            pointer = json.loads(original)
+            pointer[key] = value
+            pointer_path.write_text(json.dumps(pointer))
+            with self.subTest(key=key), self.assertRaises(tool.Error):
+                self.inspect()
+        pointer_path.write_bytes(original)
+        self.path.write_bytes(self.path.read_bytes() + b"changed")
+        with self.assertRaises(tool.Error):
+            self.inspect()
+
+    def test_run_lock_is_exclusive_and_released_after_exception(self):
+        with resume_tool._process_lock(self.root):
+            with self.assertRaises(tool.Error), resume_tool._process_lock(self.root):
+                self.fail("Second lock must not be acquired")
+        with resume_tool._process_lock(self.root):
+            pass
+
+    def test_metadata_and_history_redirects_fail_before_read_or_enumeration(self):
+        original = tool._path
+        def guard(root, relative):
+            if Path(relative).name in {"epoch_state.json", "resume_attempts"}:
+                raise tool.Error("synthetic path redirect")
+            return original(root, relative)
+        with patch.object(tool, "_path", side_effect=guard), patch.object(tool, "_read") as read, self.assertRaises(tool.Error):
+            self.inspect()
+        read.assert_not_called()
+        with patch.object(tool, "_path", side_effect=guard), patch.object(Path, "iterdir") as enumerate_paths, self.assertRaises(tool.Error):
+            resume_tool._read_history(self.root, self.run, self.config, self.identity, self.rows)
+        enumerate_paths.assert_not_called()
+
+    def test_completion_after_second_resume_preserves_three_training_segments(self):
+        state = self.migration_fixture()
+        callbacks = self.advance_synthetic_resume(state, final_epoch=100, interrupted=False)
+        (self.run / "weights/best.pt").write_bytes(self.path.read_bytes())
+        started = json.loads((state.attempt / "STARTED.json").read_text())
+        with patch.object(tool, "_verify_completed_checkpoint"):
+            resume_tool._finish(state, callbacks, started)
+        receipt = json.loads((self.run / "completion.json").read_text())
+        self.assertEqual([(s["first_epoch"], s["last_completed_epoch"]) for s in receipt["training_segments"]],
+                         [(1, 33), (34, 60), (61, 100)])
+        self.assertEqual(receipt["epochs_completed"], 100)
+        self.assertEqual(len(receipt["epoch_record_sha256"]), 40)
+        with self.assertRaises(tool.Error):
+            self.inspect()
 
 
 if __name__ == "__main__":
