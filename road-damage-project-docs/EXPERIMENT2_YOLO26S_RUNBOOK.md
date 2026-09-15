@@ -1,12 +1,57 @@
 # Experiment 2: matched pretrained YOLO26s
 
-Status: full training paused after completed epoch 60, during partial epoch 61.
-The first controlled resume completed epochs 34–60. The repeated-resume durable
-state correction is prepared for review and a separate user-created commit; it
-has not executed another resume. Earlier smoke attempts remain historical evidence. This
+Status: full training completed by early stopping after epoch 83. The frozen
+validation-selected checkpoint is `weights/best.pt` from epoch 63, SHA-256
+`99c03d56f4b27d6a9cc774dd3880f11807642058934199ed675dc3bf4b9f37a1`.
+Earlier smoke attempts and interrupted resume segments remain historical evidence. This
 implements the PRD's V1 detector comparison / RQ2 and EVALUATION_PLAN experiment.
 The original full-training commit is
 `39070294088a725edf9092d861e5da4d750acd25`.
+
+## Validation-only operating-threshold selection
+
+The dedicated selector is
+`src/road_damage/evaluation/select_experiment2_threshold.py`, governed by
+`configs/evaluation/experiment2_yolo26s_threshold_selection.yaml`. It verifies
+the frozen epoch-63 checkpoint and its recorded validation row, then uses only
+the approved 2,602-image validation split (1,619 positive, 983 negative-only;
+3,377 targets: D00 822, D10 576, D20 1,188, D40 791).
+
+Installed Ultralytics 8.4.130 runs this YOLO26 `end2end=true` head through its
+one-to-one branch. The head selects its native top-k outputs and the predictor's
+end-to-end branch applies the confidence filter without legacy NMS. Therefore
+NMS IoU is **not applicable and is not supplied or swept**. The selector runs
+one logical native prediction pass in explicit four-image batches at confidence floor 0.010, caches all retained
+validation predictions, and evaluates one global confidence from 0.010 through
+0.800 in increments of 0.001. Matching is class-aware at IoU >= 0.50. Selection
+maximizes exact four-class macro-F1, then minimizes false positives per
+negative-only image, then chooses the higher global confidence. Per-class
+thresholds are forbidden.
+
+Preflight (no inference):
+
+```powershell
+.\.venv\Scripts\python.exe src\road_damage\evaluation\select_experiment2_threshold.py --preflight
+```
+
+Real validation-only cache and sweep:
+
+```powershell
+.\.venv\Scripts\python.exe src\road_damage\evaluation\select_experiment2_threshold.py
+```
+
+Offline cache replay (no model or dataset access):
+
+```powershell
+.\.venv\Scripts\python.exe src\road_damage\evaluation\select_experiment2_threshold.py --recompute-cache
+```
+
+The run refuses to overwrite either output directory. A completion receipt is
+published only after the saved prediction/ground-truth caches, metric sweep and
+selected point are reopened, hash-verified and reproduced. Internal-test data,
+official unlabelled test images, training images and teacher video are excluded.
+The baseline comparison uses each model's own validation-selected operating
+point; YOLO26 is not forced to reuse YOLOv8s confidence or NMS settings.
 
 ## Scientific design
 
@@ -388,8 +433,8 @@ Every resume record declares `internal_test_files_accessed=false`; individual
 internal-test data remains locked and is never used for training, validation,
 inference, debugging, or threshold selection.
 
-After completion, checkpoint selection and operating-point selection must use
-validation only, with the same metric philosophy as the baseline and explicit
+Checkpoint selection and the operating-point selection above use validation
+only, with the same metric philosophy as the baseline and explicit native
 end-to-end output semantics. No internal-test evaluation is authorized here.
 
 ## Verification commands
