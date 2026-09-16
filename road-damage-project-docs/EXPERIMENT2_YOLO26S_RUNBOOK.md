@@ -53,6 +53,40 @@ official unlabelled test images, training images and teacher video are excluded.
 The baseline comparison uses each model's own validation-selected operating
 point; YOLO26 is not forced to reuse YOLOv8s confidence or NMS settings.
 
+## Validation-only error analysis
+
+The cache-only error analysis is implemented by
+`src/road_damage/evaluation/experiment2_error_analysis.py` with the frozen
+protocol in `configs/evaluation/experiment2_yolo26s_error_analysis.yaml`:
+
+```powershell
+.\.venv\Scripts\python.exe src\road_damage\evaluation\experiment2_error_analysis.py
+```
+
+It verifies and replays the approved YOLO26 prediction cache at global
+confidence 0.193 and matching IoU 0.50. It does not import Ultralytics, load the
+model, or read canonical dataset files. Every FN and FP receives one
+deterministic cache-observable category. FN priority distinguishes
+below-confidence correct-class candidates, same-class matching competition,
+two localization IoU bands, retained wrong-class overlap, and exactly “no
+stronger cached candidate above the 0.010 inference floor.” The last phrase
+must not be interpreted as “the model saw nothing.”
+
+Object-size, aspect-ratio, target-density and country summaries are descriptive
+associations only. Bounding-box footprint is not physical damage area or
+engineering severity. India D10 conclusions remain explicitly limited by its
+10 targets in 10 validation images. The approved YOLOv8 error-analysis manifest
+and artifacts are hash-verified and ingested for comparison; YOLOv8 inference
+is not repeated. YOLO26 same-class overlapping unmatched predictions are
+reported as observable native end-to-end output, without inventing legacy-NMS
+duplicate semantics.
+
+The output is `outputs/evaluation/experiment2_yolo26s_error_analysis/`. It is
+never overwritten, and `completion.json` is written only after every persisted
+machine-readable artifact has been reread and hash-verified. Internal-test
+data, official unlabelled test data, teacher video, training and threshold
+tuning remain outside this analysis.
+
 ## Scientific design
 
 Compare the completed pretrained YOLOv8s baseline with pretrained YOLO26s on
@@ -92,8 +126,9 @@ families**, not an isolated backbone-only ablation. Forcing YOLO26 into a
 non-native head/loss would be a different experiment. No change to common
 training hyperparameters is needed for compatibility. Later validation tooling
 must explicitly accommodate native end-to-end predictions; do not reuse a
-YOLOv8s NMS sweep and imply its NMS IoU has identical meaning. No new evaluation
-tooling or test comparison is implemented here.
+YOLOv8s NMS sweep and imply its NMS IoU has identical meaning. Validation
+threshold-selection and validation error-analysis tooling now implement this
+native end-to-end treatment.
 
 The `box=7.5`, `cls=0.5`, and `dfl=1.5` argument values match the completed
 YOLOv8s baseline. Their effective loss interpretation is not identical. In

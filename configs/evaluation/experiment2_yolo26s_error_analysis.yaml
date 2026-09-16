@@ -1,0 +1,79 @@
+{
+  "schema_version": "experiment2_yolo26s.validation_error_analysis.v1",
+  "source": "outputs/evaluation/experiment2_yolo26s_threshold_selection",
+  "threshold_config": "configs/evaluation/experiment2_yolo26s_threshold_selection.yaml",
+  "threshold_config_sha256": "995f51eb7c67796de71aea82cacf9bc4f6973d996bd45eba1bfd8499104671c0",
+  "ground_truth_cache": "ground_truth_cache.json",
+  "ground_truth_sha256": "61289d25f6951929f2876f9c0686d56398dd9cb8773fc247434debb0e993caf4",
+  "prediction_cache": "prediction_cache.json",
+  "prediction_sha256": "b48aebb298bd4f1881cddd10602de332f8cc0e560f05fd9b2f9dbb212b8b98ca",
+  "selected_operating_point": "selected_operating_point.json",
+  "selected_operating_point_sha256": "d5bd61eb21df8fd8a5e3c2c1e369253b4e8141528040609b9952f1834c7225c4",
+  "source_manifest": "evaluation_manifest.json",
+  "source_manifest_sha256": "70cd99b46c2d3a319ed61de0882fcc72b3aa275f52cd384035c9f6443d4e3c49",
+  "source_completion": "completion.json",
+  "source_completion_sha256": "a2dc73be837270e4244a7c8680f7f47c59cf336df9464faa924e471f535e3fa8",
+  "runtime_architecture": "runtime_architecture.json",
+  "runtime_architecture_sha256": "f3f21f278d583ff39b1bd95898ce947b5fb26fa545b0fe41afaabfc5f1c3d86f",
+  "baseline_error_analysis": "outputs/evaluation/baseline_public_v1_error_analysis",
+  "baseline_error_manifest": "error_analysis_manifest.json",
+  "baseline_error_manifest_sha256": "5e7b5ef3d4584cbd8f8fa85ab3c0886eeb8e0e2bbaa9ea6cf69750b70048ad02",
+  "model_sha256": "99c03d56f4b27d6a9cc774dd3880f11807642058934199ed675dc3bf4b9f37a1",
+  "confidence": 0.193,
+  "matching_iou": 0.50,
+  "cache_floor": 0.010,
+  "nms_applicable": false,
+  "localization_bands": [
+    {"name": "localization_iou_0.10_to_0.30", "minimum_inclusive": 0.10, "maximum_exclusive": 0.30},
+    {"name": "localization_iou_0.30_to_0.50", "minimum_inclusive": 0.30, "maximum_exclusive": 0.50}
+  ],
+  "fn_category_priority": [
+    "below_confidence_same_class_iou_ge_0.50",
+    "same_class_matching_competition_iou_ge_0.50",
+    "localization_iou_0.30_to_0.50",
+    "localization_iou_0.10_to_0.30",
+    "wrong_class_overlap_iou_ge_0.50",
+    "no_stronger_cached_candidate_above_0.010_inference_floor"
+  ],
+  "size_buckets": [
+    {"name": "small", "minimum_inclusive": 0.00, "maximum_exclusive": 0.01},
+    {"name": "medium", "minimum_inclusive": 0.01, "maximum_exclusive": 0.05},
+    {"name": "large", "minimum_inclusive": 0.05, "maximum_exclusive": 1.0000001}
+  ],
+  "aspect_ratio_buckets": [
+    {"name": "narrow", "minimum_inclusive": 0.00, "maximum_exclusive": 0.50},
+    {"name": "balanced", "minimum_inclusive": 0.50, "maximum_exclusive": 2.00},
+    {"name": "wide", "minimum_inclusive": 2.00, "maximum_exclusive": 1000000.00}
+  ],
+  "target_density_buckets": [
+    {"name": "one_target", "minimum_inclusive": 1, "maximum_exclusive": 2},
+    {"name": "two_to_three_targets", "minimum_inclusive": 2, "maximum_exclusive": 4},
+    {"name": "four_or_more_targets", "minimum_inclusive": 4, "maximum_exclusive": 1000000}
+  ],
+  "common_confidence_profile": [0.01, 0.05, 0.10, 0.15, 0.19, 0.193, 0.25, 0.50],
+  "expected_validation": {
+    "images": 2602,
+    "positive_images": 1619,
+    "negative_images": 983,
+    "targets": 3377,
+    "targets_by_class": {"0": 822, "1": 576, "2": 1188, "3": 791}
+  },
+  "expected_operating_counts": {
+    "D00": {"tp": 303, "fp": 333, "fn": 519},
+    "D10": {"tp": 248, "fp": 287, "fn": 328},
+    "D20": {"tp": 769, "fp": 489, "fn": 419},
+    "D40": {"tp": 356, "fp": 303, "fn": 435}
+  },
+  "classes": {
+    "0": "D00_longitudinal_crack",
+    "1": "D10_transverse_crack",
+    "2": "D20_alligator_crack",
+    "3": "D40_pothole"
+  },
+  "output": "outputs/evaluation/experiment2_yolo26s_error_analysis",
+  "validation_only": true,
+  "internal_test_access_permitted": false,
+  "official_unlabelled_test_used": false,
+  "teacher_video_used": false,
+  "model_inference_permitted": false
+}
