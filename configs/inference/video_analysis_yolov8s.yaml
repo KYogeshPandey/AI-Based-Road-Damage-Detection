@@ -1,0 +1,53 @@
+{
+  "schema_version": "road_damage.video_analysis_config.v1",
+  "output_schema_version": "road_damage.video_analysis.v1",
+  "model": {
+    "family": "YOLOv8s",
+    "task": "detect",
+    "path": "outputs/training/baseline_public_v1/20260907_yolov8s_rdd2022-india-japan-v1.1.0_640_seed42/weights/best.pt",
+    "sha256": "BEC3A297EAF3D9D2B5553D6D2D7550646D31B9EDF5FE41437E073975A5B1FCF7",
+    "size_bytes": 22524074
+  },
+  "operating_point": {
+    "status": "frozen_validation_selected",
+    "confidence": 0.19,
+    "nms_iou": 0.50
+  },
+  "inference": {
+    "imgsz": 640,
+    "max_detections": 300,
+    "augment": false,
+    "frame_stride": 1,
+    "device": "auto"
+  },
+  "classes": {
+    "0": "D00_longitudinal_crack",
+    "1": "D10_transverse_crack",
+    "2": "D20_alligator_crack",
+    "3": "D40_pothole"
+  },
+  "annotation": {
+    "enabled_by_default": true,
+    "show_event_id": true,
+    "codec_fourcc": "mp4v",
+    "container_suffix": ".mp4",
+    "minimum_line_thickness": 2
+  },
+  "temporal_aggregation": {
+    "same_class_only": true,
+    "minimum_iou": 0.20,
+    "maximum_center_distance_normalized": 0.12,
+    "minimum_area_ratio": 0.25,
+    "maximum_gap_seconds": 0.20,
+    "minimum_confirmed_observations": 3
+  },
+  "progress_every_frames": 100,
+  "artifacts": {
+    "run_manifest": "run_manifest.json",
+    "summary": "summary.json",
+    "events": "events.json",
+    "frame_detections": "frame_detections.jsonl",
+    "completion": "completion.json",
+    "annotated_video": "annotated_video.mp4"
+  }
+}
