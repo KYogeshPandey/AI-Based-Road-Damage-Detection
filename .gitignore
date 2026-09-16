@@ -34,9 +34,38 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.cache
+.ipynb_checkpoints/
 *.tmp
 *.part
 *.partial
+*.bak
+*.swp
+*.swo
+*~
+
+# Test coverage, packaging, and local logs.
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+*.log
+/logs/
+
+# Editor and operating-system metadata.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Downloaded third-party literature is reference material, not redistributable source.
+/road-damage-project-docs/literature/
+
+# Generated manuscript render/audit scratch space; manuscript sources may remain trackable.
+/road-damage-project-docs/research-paper/audit/
 
 # Private video and local environment values.
 *.avi
