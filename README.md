@@ -3,8 +3,9 @@
 An academic computer-vision project for detecting road damage in images and
 dashcam video. The repository currently contains a reproducible RDD2022 data
 pipeline, two completed detector experiments, validation-only operating-point
-selection, error analysis, and presentation demos. The production-style video,
-event-aggregation, API, dashboard, and deployment layers are the next phase.
+selection, error analysis, presentation demos, the Phase 4 video/event
+pipeline, and a non-executing Phase 5A FastAPI foundation. Analysis-job
+execution, result storage, the dashboard, and deployment remain future work.
 
 ## Problem Statement
 
@@ -26,11 +27,12 @@ volume, repair cost, or engineering severity from monocular imagery.
 | Validation-only threshold selection for both detectors | Complete |
 | Validation-only error analysis and detector selection | Complete |
 | Primary detector selection | YOLOv8s selected |
-| Full video inference and temporal event aggregation | Next phase |
-| Backend, result storage, dashboard, and deployment | Next phase |
+| Full video inference and heuristic temporal event aggregation | Complete (Phase 4) |
+| FastAPI contracts, health/system endpoints, and service boundary | Complete (Phase 5A; execution disabled) |
+| Analysis-job execution, result storage, dashboard, and deployment | Next phase |
 
-The repository includes image and video demonstration utilities, but it does
-not yet contain the complete deployable road-damage application.
+The repository includes image/video utilities and stable backend contracts, but
+it does not yet expose video submission or execute analysis through the API.
 
 ## Damage Classes
 
@@ -122,14 +124,15 @@ RDD2022 India + Japan
   -> YOLOv8s primary detector
 ```
 
-The planned application continuation is:
+The application continuation is:
 
 ```text
 selected detector
   -> video inference
   -> tracking and temporal damage-event aggregation
   -> annotated video and structured report
-  -> FastAPI backend and result/database layer
+  -> Phase 5A FastAPI contracts (execution disabled)
+  -> analysis jobs and result/database layer
   -> frontend dashboard
   -> deployment
 ```
@@ -148,9 +151,12 @@ AI_Road_Damage_Project/
 |   |-- training/      # frozen baseline and YOLO26s experiment configs
 |   `-- video/         # inspection and reconnaissance settings
 |-- src/road_damage/
+|   |-- api/            # Phase 5A HTTP contracts; analysis execution disabled
+|   |-- aggregation/    # heuristic temporal damage-event aggregation
 |   |-- dataset/       # RDD2022 acquisition, audit, construction, and export
 |   |-- demo/          # image and video presentation demos
 |   |-- evaluation/    # threshold selection and validation analyses
+|   |-- inference/      # frozen Phase 4 video application service
 |   |-- training/      # baseline, Experiment 2, checkpoint, and resume tooling
 |   `-- video/         # metadata inspection and reconnaissance
 |-- tests/              # unit and integration tests
@@ -161,6 +167,7 @@ AI_Road_Damage_Project/
 |-- outputs/             # local/ignored generated runs and evaluation artifacts
 |-- models/, weights/    # local/ignored model assets
 |-- AGENTS.md
+|-- requirements-backend.txt
 |-- requirements.txt
 `-- README.md
 ```
@@ -266,19 +273,17 @@ reviewing their source-specific permissions and license obligations.
   differences; they are descriptive rather than causal.
 - India D10 has low validation support (10 boxes in 10 images).
 - Fine or distant cracks and small D20 regions remain difficult.
-- The full video/event/backend/dashboard/deployment pipeline is still under
-  development.
+- API submission/execution, durable job storage, dashboard, and deployment are
+  still under development; Phase 5A endpoints are read-only capabilities.
 
 ## Roadmap
 
-1. Complete the video inference pipeline.
-2. Add temporal tracking and unique `DamageEvent` aggregation.
-3. Add a FastAPI backend and analysis-job lifecycle.
-4. Add result storage/database records.
-5. Build the frontend dashboard.
-6. Run the teacher dashcam demonstration without treating it as ground-truth
+1. Connect the Phase 5A service boundary to a reviewed asynchronous analysis-job lifecycle.
+2. Add result storage/database records.
+3. Build the frontend dashboard.
+4. Run the teacher dashcam demonstration without treating it as ground-truth
    evaluation.
-7. Package and deploy the end-to-end application.
+5. Package and deploy the end-to-end application.
 
 ## Documentation
 
@@ -293,6 +298,7 @@ reviewing their source-specific permissions and license obligations.
 - [Threshold-Selection Runbook](road-damage-project-docs/THRESHOLD_SELECTION_RUNBOOK.md)
 - [Validation Error-Analysis Runbook](road-damage-project-docs/ERROR_ANALYSIS_RUNBOOK.md)
 - [YOLO26s Experiment Runbook](road-damage-project-docs/EXPERIMENT2_YOLO26S_RUNBOOK.md)
+- [Phase 5A FastAPI Backend](road-damage-project-docs/FASTAPI_BACKEND.md)
 - [Mentor Demo Runbook](road-damage-project-docs/MENTOR_DEMO_RUNBOOK.md)
 - [Video Demo Runbook](road-damage-project-docs/VIDEO_DEMO_RUNBOOK.md)
 - [Ethics, Privacy, and Licensing](road-damage-project-docs/ETHICS_AND_LICENSE.md)
