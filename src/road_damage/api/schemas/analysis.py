@@ -44,7 +44,7 @@ class DamageEventStatus(str, Enum):
 
 
 class AnalysisSubmissionRequest(ApiSchema):
-    """Future upload metadata; deliberately accepts no server-side path."""
+    """Safe display-filename contract retained from the Phase 5A boundary."""
 
     input_filename: str = Field(min_length=1, max_length=255)
 
@@ -263,9 +263,9 @@ class DamageEventResponse(ApiSchema):
 
 
 class AnalysisExecutionCapability(ApiSchema):
-    submission_enabled: Literal[False]
-    execution_enabled: Literal[False]
-    current_phase: Literal["Phase 5A"]
-    message: Literal[
-        "Analysis execution is intentionally disabled in Phase 5A; no submission endpoint is exposed."
-    ]
+    submission_enabled: Literal[True]
+    execution_enabled: Literal[True]
+    current_phase: Literal["Phase 5B"]
+    message: str = Field(min_length=1)
+    supported_video_extensions: tuple[str, ...]
+    maximum_upload_bytes: int = Field(ge=1)

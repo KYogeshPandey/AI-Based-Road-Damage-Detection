@@ -1,149 +1,153 @@
-# Phase 5A FastAPI Backend Foundation
+# Phase 5B Secure Video Upload and Phase 4 Integration
 
-## Status and boundary
+## Scope and scientific boundary
 
-Phase 5A provides a versioned HTTP boundary around the completed Phase 4
-application contracts. It does **not** accept analysis submissions, run model
-inference, load a checkpoint, inspect CUDA, or read datasets. The execution
-service is intentionally disabled until Phase 5B connects a reviewed job
-runner to the existing `analyze_video(...)` application service.
+Phase 5B accepts a user video, stages it in API-owned storage, performs a
+lightweight OpenCV decodability check, and runs the existing Phase 4
+`analyze_video(...)` application service as a FastAPI background task. It does
+not duplicate inference, tracking, temporal aggregation, annotation, or report
+generation.
 
-The API is a local application foundation, not a cloud deployment. It does not
-change the V1 scientific scope or any frozen Phase 4 setting.
-
-## Package structure
-
-```text
-src/road_damage/api/
-|-- app.py                 # create_app() and importable ASGI app
-|-- config.py              # strict backend-only environment settings
-|-- dependencies.py        # request-scoped service/settings providers
-|-- errors.py              # stable public error envelope and handlers
-|-- paths.py               # filename and output-root confinement
-|-- routes/
-|   |-- health.py
-|   |-- system.py
-|   `-- analyses.py
-|-- schemas/
-|   |-- common.py
-|   |-- health.py
-|   `-- analysis.py
-`-- services/
-    `-- analysis_service.py
-```
-
-Route handlers contain only HTTP translation and dependency calls. The
-analysis-service protocol is the application boundary; persistence and
-execution implementations belong behind that interface.
+The API exposes no checkpoint, model, confidence, NMS, class, device, tracking,
+aggregation, or output-path controls. The frozen Phase 4 configuration and
+checkpoint identity remain authoritative. Importing the ASGI application does
+not import Ultralytics, PyTorch, or the Phase 4 analysis module; that module is
+loaded only after an accepted job begins execution.
 
 ## Install and start
 
-Keep backend dependencies separate from the frozen detector requirements:
+Backend dependencies are separate from the frozen detector requirements:
 
 ```powershell
 python -m pip install -r requirements-backend.txt
-```
-
-No dependency installation is performed by the application itself. From the
-repository root, the exact development start command is:
-
-```powershell
 python -m uvicorn road_damage.api.app:app --app-dir src --host 127.0.0.1 --port 8000
 ```
 
-Interactive OpenAPI documentation is available at `/docs` and the schema at
-`/openapi.json` when `ROAD_DAMAGE_API_DOCS_ENABLED` is true (the development
-default).
+OpenAPI documentation is at `/docs` and the schema at `/openapi.json` when
+`ROAD_DAMAGE_API_DOCS_ENABLED` is true. Starting Uvicorn does not load the
+model; the first accepted background analysis does.
 
-## Versioning and endpoints
+## Endpoints
 
-The API version is `1.0.0`; all application routes use `/api/v1`.
+All routes use `/api/v1`.
 
 | Method | Route | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/health` | Cheap process liveness; no model, GPU, checkpoint, or data access |
-| `GET` | `/api/v1/system` | Safe public capabilities and the frozen four-class contract |
-| `GET` | `/api/v1/analyses/capabilities` | Explicitly reports that submission and execution are disabled |
+| `GET` | `/health` | Cheap process liveness with no model or GPU access |
+| `GET` | `/system` | Frozen class and application capabilities |
+| `GET` | `/analyses/capabilities` | Upload/execution state, extensions, and size limit |
+| `POST` | `/analyses` | One multipart upload under the field `file`; returns `202` |
+| `GET` | `/analyses/{job_id}` | Current immutable job status and artifact availability |
 
-There is deliberately no `POST /api/v1/analyses` route and no fake completed
-job. Requests to that unregistered path receive the standard safe `404
-NOT_FOUND` envelope; `405 METHOD_NOT_ALLOWED` would imply that the exact path
-is registered for another method.
+Only `.mp4`, `.avi`, `.mov`, and `.mkv` uploads are accepted. The client may
+provide only a display filename and bytes—not a server path or scientific
+setting.
 
-### Health response
+### Manual PowerShell submission and polling
 
-```json
-{
-  "status": "ok",
-  "service": "AI-Based Road Damage Detection API",
-  "api_version": "1.0.0"
-}
+These commands are examples only. Choose a permission-safe local road video;
+do not use protected test data.
+
+```powershell
+$response = curl.exe -sS -X POST -F "file=@C:\path\to\road-video.mp4" http://127.0.0.1:8000/api/v1/analyses
+$job = $response | ConvertFrom-Json
+$job
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/analyses/$($job.job_id)"
 ```
 
-### System response
+## Upload and storage safety
 
-The system response exposes only stable application facts: API version, the
-four canonical class IDs/names plus friendly display names, model family
-`YOLOv8s`, operating-point status `frozen_validation_selected`, Phase 4 output
-artifact names, and the disabled Phase 5A execution capability. It never
-returns absolute paths, host information, secrets, checkpoint bytes, dataset
-details, or CUDA information.
+Uploads are copied in bounded chunks and the maximum byte count is enforced
+while streaming. Before Starlette parses or spools multipart data, a targeted
+ASGI receive guard also counts the raw request-body bytes. The raw-body ceiling
+is the configured video-file limit plus a fixed 1,048,576-byte allowance for
+multipart boundaries and headers. This keeps ingress bounded while still
+allowing a file whose size is exactly the configured file maximum. Both a
+declared `Content-Length` and the actual streamed bytes are checked, so absent
+or understated headers do not bypass the guard.
 
-## Job lifecycle contract
+Empty content, unsupported extensions, unsafe filenames, extra multipart
+controls, oversized content, and undecodable video are rejected with stable
+errors. Rejected or incomplete uploads remove their newly-created UUID job
+directory.
 
-The future application job lifecycle is intentionally distinct from the
-Phase 4 pipeline-run status:
+An accepted job uses this controlled layout:
+
+```text
+outputs/api/<job-uuid>/
+|-- input/
+|   `-- video.<validated-extension>
+`-- analysis/
+    |-- annotated_video.mp4
+    |-- run_manifest.json
+    |-- summary.json
+    |-- events.json
+    |-- frame_detections.jsonl
+    `-- completion.json
+```
+
+The original safe filename is metadata only. It never becomes a server path.
+The `analysis/` directory is supplied directly to Phase 4 and is not created in
+advance. Accepted inputs and any partial analysis artifacts are retained when
+execution fails so the job remains auditable.
+
+The UUID parent directory is reserved exclusively with fail-if-present
+semantics before either child directory is created. A UUID collision or other
+pre-existing parent is never reused or removed. Recursive cleanup is permitted
+only when the current request successfully created that exact parent.
+
+Before scheduling, OpenCV opens the staged file, checks positive dimensions,
+frame rate and frame count, and decodes one frame. This validation does not
+load the detector, read a checkpoint, inspect a GPU, or run inference.
+
+## Lifecycle and truthful completion
+
+The process-local registry is thread-safe and stores immutable response
+objects. Allowed transitions are:
 
 ```text
 QUEUED -> RUNNING -> COMPLETED
-                  -> FAILED
-                  -> INTERRUPTED
+       `-> FAILED  `-> FAILED
+                    `-> INTERRUPTED
 ```
 
-Job responses have a UUID, status, timezone-aware timestamps, progress,
-display-only input filename, artifact-availability flags, and an optional
-safe error. Progress uses non-negative frame counts; unknown totals and
-percentages remain `null` rather than being fabricated.
+Timestamps are timezone-aware and monotonic within a job. Running progress may
+remain unknown rather than being fabricated. A job can become `COMPLETED` only
+after an independent API-owned validator reconciles the actual frozen Phase 4
+contract. It validates the completion, manifest, summary, and events schemas;
+`COMPLETED` statuses; run IDs; manifest SHA-256; the exact required artifact
+hash mapping; model and staged-input identities; frame/event totals; safety
+flags; and the absence of Phase 4's `.run.lock`. Malformed, missing,
+inconsistent, or tampered evidence fails closed. Physical artifact availability
+may still be reported for a failed job, but file presence alone never proves
+completion.
 
-Lifecycle validation rejects contradictory records. `QUEUED` has no start,
-completion, or error; `RUNNING` has a start but no completion or error;
-`COMPLETED` has both timestamps and no error; and `FAILED` has both timestamps
-plus an error. `INTERRUPTED` has both timestamps and may optionally include
-safe error metadata, preserving interruption details when available. Timestamp
-ordering is `created_at <= started_at <= completed_at <= updated_at`, omitting
-the optional timestamps only where the lifecycle permits it.
+Failure messages returned to clients are stable and do not contain exception
+text or local paths. Artifact availability flags are derived from the actual
+files present.
 
-The Phase 4 result projection preserves `COMPLETED`, `FAILED_TECHNICAL`, and
-`INTERRUPTED` as a separate vocabulary. Summary contracts include inferred
-frames, raw detection-observation totals, heuristic temporal-event totals,
-confirmed/tentative totals, per-class counts, and processing/inference timing.
-Overall raw-observation, event, confirmed-event, and tentative-event totals
-must each reconcile with their per-class counts; inconsistent records fail
-validation rather than being repaired.
-
-Event responses preserve canonical machine-readable `class_id`, `class_name`,
-and `event_id`, while also exposing `friendly_display_name`. Event totals are
-described as heuristic temporal damage events, not ground-truth counts of
-unique physical-world defects.
+The registry is intentionally in-memory for Phase 5B: jobs survive request
+boundaries within one process, but not a server restart. A durable database,
+result download endpoints, authentication, and a distributed queue remain
+future work.
 
 ## Error contract
 
-Validation, missing-resource, known application, method, and internal errors
-use one envelope:
+Errors use one envelope:
 
 ```json
 {
   "error": {
-    "code": "INVALID_REQUEST",
-    "message": "Request validation failed.",
-    "details": {}
+    "code": "INVALID_UPLOAD",
+    "message": "The uploaded video is invalid.",
+    "details": null
   }
 }
 ```
 
-Validation details contain only field locations, safe messages, and error
-types. Unexpected exceptions return a generic message; tracebacks, absolute
-paths, environment variables, and exception representations are not exposed.
+Stable upload/job codes include `INVALID_UPLOAD`, `UPLOAD_TOO_LARGE`,
+`UNSUPPORTED_VIDEO_TYPE`, `VIDEO_VALIDATION_FAILED`, `UPLOAD_FAILED`,
+`ANALYSIS_NOT_FOUND`, and `ANALYSIS_EXECUTION_FAILED` (in failed job state).
 
 ## Backend configuration
 
@@ -151,47 +155,16 @@ Only these runtime environment variables are accepted:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `ROAD_DAMAGE_API_HOST` | `127.0.0.1` | Server bind host used by launch tooling |
+| `ROAD_DAMAGE_API_HOST` | `127.0.0.1` | Bind host used by launch tooling |
 | `ROAD_DAMAGE_API_PORT` | `8000` | Server port used by launch tooling |
-| `ROAD_DAMAGE_API_DEBUG` | `false` | Reserved for safe logging integration; error bodies remain non-debug |
-| `ROAD_DAMAGE_API_DOCS_ENABLED` | `true` | Enables development docs/OpenAPI routes |
-| `ROAD_DAMAGE_API_MAX_UPLOAD_BYTES` | `536870912` | Future upload boundary limit |
-| `ROAD_DAMAGE_API_OUTPUT_ROOT` | `outputs/api` | Controlled output root, required to remain below `outputs/` |
-| `ROAD_DAMAGE_API_CORS_ORIGINS` | empty | Comma-separated explicit origins |
-| `ROAD_DAMAGE_API_CORS_ALLOW_CREDENTIALS` | `false` | Credentialed CORS for an explicit allowlist only |
+| `ROAD_DAMAGE_API_DEBUG` | `false` | Logging integration flag; responses remain non-debug |
+| `ROAD_DAMAGE_API_DOCS_ENABLED` | `true` | Enable local docs and OpenAPI routes |
+| `ROAD_DAMAGE_API_MAX_UPLOAD_BYTES` | `536870912` | Maximum streamed upload size |
+| `ROAD_DAMAGE_API_UPLOAD_CHUNK_BYTES` | `1048576` | Bounded streaming chunk size |
+| `ROAD_DAMAGE_API_OUTPUT_ROOT` | `outputs/api` | Dedicated output child directory |
+| `ROAD_DAMAGE_API_CORS_ORIGINS` | empty | Explicit comma-separated origins |
+| `ROAD_DAMAGE_API_CORS_ALLOW_CREDENTIALS` | `false` | Credentials only with an allowlist |
 
-The loader uses a strict allowlist. Model paths, checkpoint selection,
-confidence, NMS IoU, image size, class mapping, device, aggregation settings,
-and all other scientific controls cannot be overridden through API environment
-variables.
-
-## Path and CORS safety
-
-Future client input may provide a base filename for display, but never an
-arbitrary server path. Absolute Windows/POSIX paths, drive names, separators,
-`..`, alternate data-stream syntax, and NUL characters are rejected. Job
-directories use canonical UUIDs and are confined below the configured output
-root. The output root itself must be a dedicated child of project `outputs/`,
-which prevents API writes into `src/`, `configs/`, `models/`, or `data/`.
-
-CORS middleware is absent by default. When enabled it requires explicit
-`http://` or `https://` origins; wildcard origins are rejected. Allowed methods
-in Phase 5A are read-only `GET` requests.
-
-## Phase 5B integration boundary
-
-`AnalysisService` defines future create/get/summary/events operations.
-`AnalysisExecutionDisabledService` is the only Phase 5A implementation. Phase
-5B may implement asynchronous job persistence and invoke the existing shared
-application service, but it must not duplicate inference logic or introduce
-API-level scientific overrides.
-
-## Current limitations
-
-- No video upload or submission endpoint.
-- No analysis execution, queue, worker, or database.
-- No result-download endpoint or authentication layer.
-- No cloud/deployment configuration.
-- Backend dependencies are not part of the frozen training environment and
-  must be installed explicitly from `requirements-backend.txt` before runtime
-  API tests or server startup.
+The output root must remain a dedicated child of project `outputs/`. CORS is
+off by default; when enabled, only explicit HTTP(S) origins and `GET`/`POST`
+methods are allowed.

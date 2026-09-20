@@ -1,8 +1,8 @@
 """Application-service interfaces used by the API boundary."""
 
 from road_damage.api.services.analysis_service import (
-    AnalysisExecutionDisabledService,
     AnalysisService,
+    Phase5BAnalysisService,
 )
 
-__all__ = ["AnalysisExecutionDisabledService", "AnalysisService"]
+__all__ = ["AnalysisService", "Phase5BAnalysisService"]

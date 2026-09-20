@@ -37,12 +37,63 @@ class ResourceNotFoundError(ApiApplicationError):
         )
 
 
-class AnalysisExecutionUnavailableError(ApiApplicationError):
+class AnalysisResultRetrievalUnavailableError(ApiApplicationError):
     def __init__(self) -> None:
         super().__init__(
-            code="ANALYSIS_EXECUTION_DISABLED",
-            message="Analysis execution is not enabled in Phase 5A.",
+            code="ANALYSIS_RESULT_RETRIEVAL_UNAVAILABLE",
+            message="Full analysis result retrieval is not enabled in Phase 5B.",
             status_code=503,
+        )
+
+
+class InvalidUploadError(ApiApplicationError):
+    def __init__(self, message: str = "The uploaded video is invalid.") -> None:
+        super().__init__(code="INVALID_UPLOAD", message=message, status_code=400)
+
+
+class UnsupportedVideoTypeError(ApiApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="UNSUPPORTED_VIDEO_TYPE",
+            message="The uploaded file extension is not supported.",
+            status_code=415,
+        )
+
+
+class UploadTooLargeError(ApiApplicationError):
+    def __init__(self, maximum_bytes: int) -> None:
+        super().__init__(
+            code="UPLOAD_TOO_LARGE",
+            message="The uploaded video exceeds the configured size limit.",
+            status_code=413,
+            details={"maximum_bytes": maximum_bytes},
+        )
+
+
+class VideoValidationFailedError(ApiApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="VIDEO_VALIDATION_FAILED",
+            message="The uploaded file is not a supported decodable video.",
+            status_code=422,
+        )
+
+
+class UploadStorageError(ApiApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="UPLOAD_FAILED",
+            message="The video upload could not be stored.",
+            status_code=500,
+        )
+
+
+class AnalysisNotFoundError(ApiApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ANALYSIS_NOT_FOUND",
+            message="Analysis job was not found.",
+            status_code=404,
         )
 
 
@@ -92,6 +143,14 @@ async def _http_error_handler(
         return JSONResponse(
             status_code=405,
             content=error_payload("METHOD_NOT_ALLOWED", "Method not allowed."),
+        )
+    if exc.status_code == 413:
+        return JSONResponse(
+            status_code=413,
+            content=error_payload(
+                "UPLOAD_TOO_LARGE",
+                "The HTTP request body exceeds the configured upload limit.",
+            ),
         )
     return JSONResponse(
         status_code=exc.status_code,

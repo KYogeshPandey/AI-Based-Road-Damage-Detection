@@ -25,6 +25,7 @@ _ENV_FIELDS = MappingProxyType(
         "DEBUG": "debug",
         "DOCS_ENABLED": "docs_enabled",
         "MAX_UPLOAD_BYTES": "max_upload_bytes",
+        "UPLOAD_CHUNK_BYTES": "upload_chunk_bytes",
         "OUTPUT_ROOT": "output_root",
         "CORS_ORIGINS": "cors_origins",
         "CORS_ALLOW_CREDENTIALS": "cors_allow_credentials",
@@ -105,6 +106,7 @@ class BackendSettings:
     debug: bool = False
     docs_enabled: bool = True
     max_upload_bytes: int = 536_870_912
+    upload_chunk_bytes: int = 1_048_576
     output_root: Path = DEFAULT_OUTPUT_ROOT
     cors_origins: tuple[str, ...] = ()
     cors_allow_credentials: bool = False
@@ -116,6 +118,10 @@ class BackendSettings:
             raise BackendConfigurationError("API port must be between 1 and 65535.")
         if self.max_upload_bytes < 1:
             raise BackendConfigurationError("Maximum upload size must be positive.")
+        if not 1 <= self.upload_chunk_bytes <= 16 * 1024 * 1024:
+            raise BackendConfigurationError(
+                "Upload chunk size must be between 1 and 16777216 bytes."
+            )
         object.__setattr__(self, "output_root", resolve_output_root(self.output_root))
         parsed_origins = _parse_cors_origins(",".join(self.cors_origins))
         object.__setattr__(self, "cors_origins", parsed_origins)
@@ -161,6 +167,13 @@ class BackendSettings:
                 value,
                 minimum=1,
                 maximum=100 * 1024 * 1024 * 1024,
+            )
+        if (value := get("UPLOAD_CHUNK_BYTES")) is not None:
+            kwargs["upload_chunk_bytes"] = _parse_int(
+                "ROAD_DAMAGE_API_UPLOAD_CHUNK_BYTES",
+                value,
+                minimum=1,
+                maximum=16 * 1024 * 1024,
             )
         if (value := get("OUTPUT_ROOT")) is not None:
             kwargs["output_root"] = Path(value)

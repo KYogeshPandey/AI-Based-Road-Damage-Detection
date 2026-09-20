@@ -1,10 +1,12 @@
-"""Focused Phase 5A backend contracts and safety regression tests."""
+"""Focused Phase 5B backend contracts and safety regression tests."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import types
 import unittest
@@ -113,6 +115,7 @@ class BackendConfigurationTests(unittest.TestCase):
                 "ROAD_DAMAGE_API_DEBUG": "true",
                 "ROAD_DAMAGE_API_DOCS_ENABLED": "false",
                 "ROAD_DAMAGE_API_MAX_UPLOAD_BYTES": "1024",
+                "ROAD_DAMAGE_API_UPLOAD_CHUNK_BYTES": "64",
                 "ROAD_DAMAGE_API_OUTPUT_ROOT": "outputs/api-test",
                 "ROAD_DAMAGE_API_CORS_ORIGINS": (
                     "http://localhost:3000,https://frontend.example"
@@ -124,6 +127,7 @@ class BackendConfigurationTests(unittest.TestCase):
         self.assertTrue(settings.debug)
         self.assertFalse(settings.docs_enabled)
         self.assertEqual(settings.max_upload_bytes, 1024)
+        self.assertEqual(settings.upload_chunk_bytes, 64)
         self.assertEqual(
             settings.cors_origins,
             ("http://localhost:3000", "https://frontend.example"),
@@ -172,6 +176,25 @@ class BackendConfigurationTests(unittest.TestCase):
 
 
 class BackendSourceIsolationTests(unittest.TestCase):
+    def test_fresh_application_import_does_not_load_phase4_torch_or_ultralytics(self) -> None:
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = os.pathsep.join(
+            (str(SOURCE_ROOT), str(PROJECT_ROOT / ".venv" / "Lib" / "site-packages"))
+        )
+        probe = (
+            "import sys; import road_damage.api.app; "
+            "blocked=('road_damage.inference.video_analysis','torch','ultralytics'); "
+            "print([name for name in blocked if name in sys.modules])"
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", probe],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(completed.stdout.strip(), "[]")
+
     def test_api_source_does_not_import_phase4_inference_or_ml_frameworks(self) -> None:
         forbidden = (
             "from road_damage.inference",
@@ -206,7 +229,13 @@ class BackendSourceIsolationTests(unittest.TestCase):
     def test_backend_dependency_file_is_separate_and_pinned(self) -> None:
         backend = (PROJECT_ROOT / "requirements-backend.txt").read_text(encoding="utf-8")
         root = (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8")
-        for name in ("fastapi==", "pydantic==", "uvicorn==", "httpx=="):
+        for name in (
+            "fastapi==",
+            "pydantic==",
+            "uvicorn==",
+            "httpx==",
+            "python-multipart==",
+        ):
             self.assertIn(name, backend)
             self.assertNotIn(name, root)
 
@@ -258,7 +287,8 @@ class ApiRuntimeTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["model_family"], "YOLOv8s")
         self.assertEqual(payload["operating_point_status"], "frozen_validation_selected")
-        self.assertFalse(payload["analysis_execution_enabled"])
+        self.assertTrue(payload["analysis_execution_enabled"])
+        self.assertEqual(payload["current_phase"], "Phase 5B")
         self.assertEqual(
             [(item["class_id"], item["class_name"], item["friendly_display_name"]) for item in payload["canonical_classes"]],
             [
@@ -272,40 +302,30 @@ class ApiRuntimeTests(unittest.TestCase):
         self.assertNotIn(str(PROJECT_ROOT), serialized)
         self.assertNotIn("best.pt", serialized)
 
-    def test_analysis_execution_is_explicitly_disabled(self) -> None:
+    def test_analysis_execution_capability_is_truthful(self) -> None:
         response = self.client.get("/api/v1/analyses/capabilities")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
             {
-                "submission_enabled": False,
-                "execution_enabled": False,
-                "current_phase": "Phase 5A",
-                "message": (
-                    "Analysis execution is intentionally disabled in Phase 5A; "
-                    "no submission endpoint is exposed."
-                ),
+                "submission_enabled": True,
+                "execution_enabled": True,
+                "current_phase": "Phase 5B",
+                "message": "Secure video submission and background analysis execution are enabled.",
+                "supported_video_extensions": [".mp4", ".avi", ".mov", ".mkv"],
+                "maximum_upload_bytes": 536870912,
             },
         )
 
-    def test_absent_submission_route_returns_safe_not_found_without_fake_job(
+    def test_submission_route_requires_the_multipart_file_field(
         self,
     ) -> None:
-        self.assertNotIn("/api/v1/analyses", self.app.openapi()["paths"])
+        self.assertIn("/api/v1/analyses", self.app.openapi()["paths"])
         response = self.client.post(
             "/api/v1/analyses", json={"input_filename": "video.mp4"}
         )
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(
-            response.json(),
-            {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": "Resource not found.",
-                    "details": None,
-                }
-            },
-        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "INVALID_REQUEST")
         self.assertNotIn("job_id", response.text)
         self.assertNotIn('"status":"COMPLETED"', response.text)
 
@@ -356,6 +376,7 @@ class ApiRuntimeTests(unittest.TestCase):
         self.assertEqual(schema["info"]["version"], "1.0.0")
         self.assertIn("/api/v1/health", schema["paths"])
         self.assertIn("/api/v1/system", schema["paths"])
+        self.assertIn("post", schema["paths"]["/api/v1/analyses"])
         self.assertNotIn("post", schema["paths"]["/api/v1/analyses/capabilities"])
 
     def test_docs_can_be_disabled(self) -> None:
@@ -780,20 +801,18 @@ class ApiSchemaAndServiceTests(unittest.TestCase):
             with self.subTest(data=data), self.assertRaises(ValidationError):
                 AnalysisJobResponse(**data)
 
-    def test_disabled_service_implements_interface_without_fake_results(self) -> None:
-        from road_damage.api.errors import AnalysisExecutionUnavailableError
-        from road_damage.api.schemas.analysis import AnalysisSubmissionRequest
+    def test_phase5b_service_implements_interface_without_loading_inference(self) -> None:
         from road_damage.api.services.analysis_service import (
-            AnalysisExecutionDisabledService,
             AnalysisService,
+            Phase5BAnalysisService,
         )
 
-        service = AnalysisExecutionDisabledService()
+        loader = Mock(side_effect=AssertionError("inference imported"))
+        service = Phase5BAnalysisService(BackendSettings(), analysis_loader=loader)
         self.assertIsInstance(service, AnalysisService)
         capability = service.capability()
-        self.assertFalse(capability.execution_enabled)
-        with self.assertRaises(AnalysisExecutionUnavailableError):
-            service.create_job(AnalysisSubmissionRequest(input_filename="road.mp4"))
+        self.assertTrue(capability.execution_enabled)
+        loader.assert_not_called()
 
 
 if __name__ == "__main__":

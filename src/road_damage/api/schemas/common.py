@@ -56,7 +56,10 @@ class ErrorResponse(ApiSchema):
 
 
 PUBLIC_ERROR_RESPONSES: dict[int, dict[str, Any]] = {
+    400: {"model": ErrorResponse, "description": "Invalid upload request."},
     404: {"model": ErrorResponse, "description": "Requested resource was not found."},
+    413: {"model": ErrorResponse, "description": "Upload exceeds the configured limit."},
+    415: {"model": ErrorResponse, "description": "Unsupported uploaded media type."},
     422: {"model": ErrorResponse, "description": "Request validation failed."},
     500: {"model": ErrorResponse, "description": "Unexpected internal error."},
 }
@@ -69,5 +72,5 @@ class SystemCapabilitiesResponse(ApiSchema):
     model_family: Literal["YOLOv8s"]
     operating_point_status: Literal["frozen_validation_selected"]
     phase4_outputs: tuple[str, ...]
-    analysis_execution_enabled: Literal[False]
-    current_phase: Literal["Phase 5A"]
+    analysis_execution_enabled: Literal[True]
+    current_phase: Literal["Phase 5B"]

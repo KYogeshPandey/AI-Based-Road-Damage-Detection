@@ -4,8 +4,8 @@ An academic computer-vision project for detecting road damage in images and
 dashcam video. The repository currently contains a reproducible RDD2022 data
 pipeline, two completed detector experiments, validation-only operating-point
 selection, error analysis, presentation demos, the Phase 4 video/event
-pipeline, and a non-executing Phase 5A FastAPI foundation. Analysis-job
-execution, result storage, the dashboard, and deployment remain future work.
+pipeline, and a secure Phase 5B FastAPI upload/execution layer. Durable result
+storage, the dashboard, and deployment remain future work.
 
 ## Problem Statement
 
@@ -28,11 +28,11 @@ volume, repair cost, or engineering severity from monocular imagery.
 | Validation-only error analysis and detector selection | Complete |
 | Primary detector selection | YOLOv8s selected |
 | Full video inference and heuristic temporal event aggregation | Complete (Phase 4) |
-| FastAPI contracts, health/system endpoints, and service boundary | Complete (Phase 5A; execution disabled) |
-| Analysis-job execution, result storage, dashboard, and deployment | Next phase |
+| Secure upload, in-process jobs, and Phase 4 API integration | Complete (Phase 5B) |
+| Durable result storage, dashboard, and deployment | Next phase |
 
-The repository includes image/video utilities and stable backend contracts, but
-it does not yet expose video submission or execute analysis through the API.
+The API now exposes secure video submission and status polling. It uses the
+shared Phase 4 analysis service and does not expose scientific overrides.
 
 ## Damage Classes
 
@@ -131,8 +131,8 @@ selected detector
   -> video inference
   -> tracking and temporal damage-event aggregation
   -> annotated video and structured report
-  -> Phase 5A FastAPI contracts (execution disabled)
-  -> analysis jobs and result/database layer
+  -> Phase 5B secure upload and in-process analysis jobs
+  -> durable result/database layer
   -> frontend dashboard
   -> deployment
 ```
@@ -151,7 +151,7 @@ AI_Road_Damage_Project/
 |   |-- training/      # frozen baseline and YOLO26s experiment configs
 |   `-- video/         # inspection and reconnaissance settings
 |-- src/road_damage/
-|   |-- api/            # Phase 5A HTTP contracts; analysis execution disabled
+|   |-- api/            # Phase 5B secure upload and Phase 4 job integration
 |   |-- aggregation/    # heuristic temporal damage-event aggregation
 |   |-- dataset/       # RDD2022 acquisition, audit, construction, and export
 |   |-- demo/          # image and video presentation demos
@@ -223,7 +223,7 @@ The full local suite is run with:
 ```
 
 The recorded project state at the time of this release-preparation pass is
-**300 tests passed locally**. This is a recorded result, not a guarantee for a
+**433 tests passed locally with zero skips**. This is a recorded result, not a guarantee for a
 different machine or dependency set. See the
 [Manual Testing Guide](road-damage-project-docs/MANUAL_TESTING_GUIDE.md) for
 safe environment, checksum, artifact, and CLI-help checks.
@@ -273,17 +273,16 @@ reviewing their source-specific permissions and license obligations.
   differences; they are descriptive rather than causal.
 - India D10 has low validation support (10 boxes in 10 images).
 - Fine or distant cracks and small D20 regions remain difficult.
-- API submission/execution, durable job storage, dashboard, and deployment are
-  still under development; Phase 5A endpoints are read-only capabilities.
+- The Phase 5B registry and background tasks are process-local; durable job
+  storage, authentication, dashboard, and deployment remain future work.
 
 ## Roadmap
 
-1. Connect the Phase 5A service boundary to a reviewed asynchronous analysis-job lifecycle.
-2. Add result storage/database records.
-3. Build the frontend dashboard.
-4. Run the teacher dashcam demonstration without treating it as ground-truth
+1. Add durable result storage/database records.
+2. Build the frontend dashboard.
+3. Run the teacher dashcam demonstration without treating it as ground-truth
    evaluation.
-5. Package and deploy the end-to-end application.
+4. Package and deploy the end-to-end application.
 
 ## Documentation
 
@@ -298,7 +297,7 @@ reviewing their source-specific permissions and license obligations.
 - [Threshold-Selection Runbook](road-damage-project-docs/THRESHOLD_SELECTION_RUNBOOK.md)
 - [Validation Error-Analysis Runbook](road-damage-project-docs/ERROR_ANALYSIS_RUNBOOK.md)
 - [YOLO26s Experiment Runbook](road-damage-project-docs/EXPERIMENT2_YOLO26S_RUNBOOK.md)
-- [Phase 5A FastAPI Backend](road-damage-project-docs/FASTAPI_BACKEND.md)
+- [Phase 5B FastAPI Backend](road-damage-project-docs/FASTAPI_BACKEND.md)
 - [Mentor Demo Runbook](road-damage-project-docs/MENTOR_DEMO_RUNBOOK.md)
 - [Video Demo Runbook](road-damage-project-docs/VIDEO_DEMO_RUNBOOK.md)
 - [Ethics, Privacy, and Licensing](road-damage-project-docs/ETHICS_AND_LICENSE.md)

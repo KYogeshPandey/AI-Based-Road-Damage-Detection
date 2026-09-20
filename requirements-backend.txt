@@ -1,6 +1,7 @@
-# Phase 5A FastAPI boundary. Install separately from the frozen ML environment.
+# Phase 5B FastAPI boundary. Install separately from the frozen ML environment.
 # Versions were selected for Python 3.12 from current stable releases on 2026-09-18.
 fastapi==0.141.1
 pydantic==2.13.5
 uvicorn==0.50.1
 httpx==0.28.1
+python-multipart==0.0.32

@@ -33,6 +33,6 @@ def system_capabilities() -> SystemCapabilitiesResponse:
             "frame_detections.jsonl",
             "completion.json",
         ),
-        analysis_execution_enabled=False,
-        current_phase="Phase 5A",
+        analysis_execution_enabled=True,
+        current_phase="Phase 5B",
     )
